@@ -918,9 +918,15 @@ client.on(Events.MessageCreate, async (message) => {
       const workerResult = admin.getWorker(threadId);
 
       if (workerResult.isErr()) {
-        await message.channel.send(
-          "このスレッドはアクティブではありません。/start コマンドで新しいスレッドを開始してください。",
-        );
+        // botが作成したスレッドかどうかをThreadInfoの存在で判断
+        const threadInfo = await workspaceManager.loadThreadInfo(threadId);
+        if (threadInfo) {
+          // botが作成したスレッドの場合のみメッセージを表示
+          await message.channel.send(
+            "このスレッドはアクティブではありません。/start コマンドで新しいスレッドを開始してください。",
+          );
+        }
+        // botが作成していないスレッドの場合は何も返信しない
         return;
       }
 
@@ -987,10 +993,15 @@ client.on(Events.MessageCreate, async (message) => {
     if (replyResult.isErr()) {
       const error = replyResult.error;
       if (error.type === "WORKER_NOT_FOUND") {
-        // このスレッド用のWorkerがまだ作成されていない場合
-        await message.channel.send(
-          "このスレッドはアクティブではありません。/start コマンドで新しいスレッドを開始してください。",
-        );
+        // botが作成したスレッドかどうかをThreadInfoの存在で判断
+        const threadInfo = await workspaceManager.loadThreadInfo(threadId);
+        if (threadInfo) {
+          // botが作成したスレッドの場合のみメッセージを表示
+          await message.channel.send(
+            "このスレッドはアクティブではありません。/start コマンドで新しいスレッドを開始してください。",
+          );
+        }
+        // botが作成していないスレッドの場合は何も返信しない
       } else {
         console.error("メッセージ処理エラー:", error);
         await message.channel.send("エラーが発生しました。");
