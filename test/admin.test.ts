@@ -217,6 +217,9 @@ Deno.test("Admin - devcontainer.jsonが存在しない場合の設定確認", as
   const admin = new Admin(adminState, workspace, undefined, undefined);
   const threadId = "thread-devcontainer-1";
 
+  // Workerを作成（Adminでの自動設定をテストするため）
+  await admin.createWorker(threadId);
+
   // devcontainer.jsonが存在しないテンポラリディレクトリを作成
   const testRepoDir = await Deno.makeTempDir({ prefix: "test_repo_" });
 
@@ -225,17 +228,18 @@ Deno.test("Admin - devcontainer.jsonが存在しない場合の設定確認", as
   assertEquals(result.hasDevcontainer, false);
   assertEquals(
     result.message.includes(
-      "devcontainer.jsonが見つからないため、自動的にローカル環境でClaudeを実行します",
+      "devcontainer.jsonが見つからないため、ローカル環境で権限チェックスキップ設定でClaude実行を開始します",
     ),
     true,
   );
-  assertEquals(Array.isArray(result.components), true);
+  assertEquals(result.components, undefined);
 
-  // 自動的にローカル環境で実行するため、権限チェックオプションが表示される
-  const hasPermissionsOption = result.message.includes(
-    "--dangerously-skip-permissions",
-  );
-  assertEquals(hasPermissionsOption, true);
+  // Workerが権限チェックスキップに自動設定されているかを確認
+  const workerResult = admin.getWorker(threadId);
+  assert(workerResult.isOk());
+  const worker = workerResult.value;
+  assertEquals(worker.getUseDevcontainer(), false);
+  assertEquals(worker.getDangerouslySkipPermissions(), true);
 
   // クリーンアップ
   await Deno.remove(testRepoDir, { recursive: true });

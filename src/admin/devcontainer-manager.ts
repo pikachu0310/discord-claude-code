@@ -150,9 +150,12 @@ export class DevcontainerManager {
     message: string;
     components?: DiscordActionRow[];
   }> {
-    this.logVerbose("devcontainer.json未発見、自動的にローカル環境で実行", {
-      threadId,
-    });
+    this.logVerbose(
+      "devcontainer.json未発見、自動的にローカル環境で権限チェックスキップで実行",
+      {
+        threadId,
+      },
+    );
 
     // 自動的にローカル環境で実行するように設定
     const config = {
@@ -163,7 +166,11 @@ export class DevcontainerManager {
     };
     await this.saveDevcontainerConfig(threadId, config);
 
-    return this.createLocalEnvResponse(threadId);
+    return {
+      hasDevcontainer: false,
+      message:
+        "devcontainer.jsonが見つからないため、ローカル環境で権限チェックスキップ設定でClaude実行を開始します。\n\n準備完了です！何かご質問をどうぞ。",
+    };
   }
 
   /**
@@ -243,24 +250,6 @@ export class DevcontainerManager {
         }\n\n下のボタンで選択してください：`,
       components: [this.createDevcontainerButtons(threadId)],
       warning: warningMessage,
-    };
-  }
-
-  /**
-   * ローカル環境の選択肢を作成する
-   */
-  private createLocalEnvResponse(
-    threadId: string,
-  ): {
-    hasDevcontainer: boolean;
-    message: string;
-    components: DiscordActionRow[];
-  } {
-    return {
-      hasDevcontainer: false,
-      message:
-        "devcontainer.jsonが見つからないため、自動的にローカル環境でClaudeを実行します。\n\n`--dangerously-skip-permissions`オプションを使用しますか？（権限チェックをスキップします。注意して使用してください）",
-      components: [this.createPermissionButtons(threadId)],
     };
   }
 

@@ -800,6 +800,13 @@ export class Worker implements IWorker {
   }
 
   /**
+   * devcontainerの使用設定を取得
+   */
+  getUseDevcontainer(): boolean {
+    return this.state.devcontainerConfig.useDevcontainer;
+  }
+
+  /**
    * devcontainerが起動済みかを取得
    */
   isDevcontainerStarted(): boolean {
@@ -851,6 +858,13 @@ export class Worker implements IWorker {
    * 権限チェックスキップ設定を取得
    */
   isDangerouslySkipPermissions(): boolean {
+    return this.configuration.getDangerouslySkipPermissions();
+  }
+
+  /**
+   * 権限チェックスキップ設定を取得
+   */
+  getDangerouslySkipPermissions(): boolean {
     return this.configuration.getDangerouslySkipPermissions();
   }
 

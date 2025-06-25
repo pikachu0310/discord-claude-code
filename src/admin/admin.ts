@@ -483,10 +483,28 @@ export class Admin implements IAdmin {
     threadId: string,
     repositoryPath: string,
   ) {
-    return this.devcontainerManager.checkAndSetupDevcontainer(
+    const result = await this.devcontainerManager.checkAndSetupDevcontainer(
       threadId,
       repositoryPath,
     );
+
+    // devcontainer.jsonが見つからない場合、自動的にWorkerを権限チェックスキップで設定
+    if (!result.hasDevcontainer) {
+      const worker = this.workerManager.getWorker(threadId);
+      if (worker) {
+        worker.setUseDevcontainer(false);
+        worker.setDangerouslySkipPermissions(true);
+        this.logVerbose(
+          "devcontainer.json未発見のためWorkerを権限チェックスキップに自動設定",
+          {
+            threadId,
+            workerName: worker.getName(),
+          },
+        );
+      }
+    }
+
+    return result;
   }
 
   /**

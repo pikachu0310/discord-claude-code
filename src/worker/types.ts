@@ -44,8 +44,10 @@ export interface IWorker {
   ): Promise<import("neverthrow").Result<void, WorkerError>>;
   setThreadId(threadId: string): void;
   isUsingDevcontainer(): boolean;
+  getUseDevcontainer(): boolean;
   setUseDevcontainer(useDevcontainer: boolean): void;
   setUseFallbackDevcontainer(useFallback: boolean): void;
+  getDangerouslySkipPermissions(): boolean;
   setDangerouslySkipPermissions(skipPermissions: boolean): void;
   startDevcontainer(
     onProgress?: (message: string) => Promise<void>,
