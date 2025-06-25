@@ -23,10 +23,8 @@ Deno.test("DevcontainerManager - devcontainer.jsonが存在しない場合", asy
       );
 
       assertEquals(result.hasDevcontainer, false);
-      assertStringIncludes(
-        result.message,
-        "devcontainer.jsonが見つからないため、ローカル環境で権限チェックスキップ設定でClaude実行を開始します",
-      );
+      // DevcontainerManagerは空文字を返すようになったので、メッセージはmain.tsで生成される
+      assertEquals(result.message, "");
     } finally {
       await Deno.remove(repoDir, { recursive: true });
     }

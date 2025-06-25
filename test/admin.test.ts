@@ -226,12 +226,8 @@ Deno.test("Admin - devcontainer.jsonが存在しない場合の設定確認", as
   const result = await admin.checkAndSetupDevcontainer(threadId, testRepoDir);
 
   assertEquals(result.hasDevcontainer, false);
-  assertEquals(
-    result.message.includes(
-      "devcontainer.jsonが見つからないため、ローカル環境で権限チェックスキップ設定でClaude実行を開始します",
-    ),
-    true,
-  );
+  // DevcontainerManagerは空文字を返すようになったので、メッセージはmain.tsで生成される
+  assertEquals(result.message, "");
   assertEquals(result.components, undefined);
 
   // Workerが権限チェックスキップに自動設定されているかを確認

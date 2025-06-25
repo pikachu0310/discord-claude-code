@@ -168,8 +168,7 @@ export class DevcontainerManager {
 
     return {
       hasDevcontainer: false,
-      message:
-        "devcontainer.jsonが見つからないため、ローカル環境で権限チェックスキップ設定でClaude実行を開始します。\n\n準備完了です！何かご質問をどうぞ。",
+      message: "", // main.tsでシンプルなメッセージを表示するため空にする
     };
   }
 
@@ -511,7 +510,7 @@ export class DevcontainerManager {
     };
     await this.saveDevcontainerConfig(threadId, config);
 
-    return "通常のローカル環境でClaude実行を設定しました。\n\n準備完了です！何かご質問をどうぞ。";
+    return "通常のローカル環境でClaude実行を設定しました。";
   }
 
   /**
@@ -571,7 +570,7 @@ export class DevcontainerManager {
 
     this.logVerbose("権限チェックありでローカル環境実行を設定", { threadId });
 
-    return "ローカル環境でClaude実行を設定しました（権限チェックあり）。\n\n準備完了です！何かご質問をどうぞ。";
+    return "ローカル環境でClaude実行を設定しました（権限チェックあり）。";
   }
 
   /**
@@ -588,7 +587,7 @@ export class DevcontainerManager {
       threadId,
     });
 
-    return "ローカル環境でClaude実行を設定しました（権限チェックスキップ）。\n\n⚠️ 権限チェックがスキップされています。注意してご利用ください。\n\n準備完了です！何かご質問をどうぞ。";
+    return "ローカル環境でClaude実行を設定しました（権限チェックスキップ）。\n\n⚠️ 権限チェックがスキップされています。注意してご利用ください。";
   }
 
   /**
