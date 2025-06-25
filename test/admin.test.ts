@@ -224,17 +224,18 @@ Deno.test("Admin - devcontainer.jsonが存在しない場合の設定確認", as
 
   assertEquals(result.hasDevcontainer, false);
   assertEquals(
-    result.message.includes("devcontainer.jsonが見つかりませんでした"),
+    result.message.includes(
+      "devcontainer.jsonが見つからないため、自動的にローカル環境でClaudeを実行します",
+    ),
     true,
   );
   assertEquals(Array.isArray(result.components), true);
 
-  // devcontainer CLIの有無によってメッセージが変わるため、どちらかの条件を満たすことを確認
+  // 自動的にローカル環境で実行するため、権限チェックオプションが表示される
   const hasPermissionsOption = result.message.includes(
     "--dangerously-skip-permissions",
   );
-  const hasFallbackOption = result.message.includes("fallback devcontainer");
-  assertEquals(hasPermissionsOption || hasFallbackOption, true);
+  assertEquals(hasPermissionsOption, true);
 
   // クリーンアップ
   await Deno.remove(testRepoDir, { recursive: true });

@@ -5,15 +5,18 @@ export class WorkerConfiguration {
   private verbose: boolean;
   private appendSystemPrompt?: string;
   private translatorUrl?: string;
+  private dangerouslySkipPermissions: boolean;
 
   constructor(
     verbose = false,
     appendSystemPrompt?: string,
     translatorUrl?: string,
+    dangerouslySkipPermissions = true, // デフォルトはtrue（既存の動作を維持）
   ) {
     this.verbose = verbose;
     this.appendSystemPrompt = appendSystemPrompt;
     this.translatorUrl = translatorUrl;
+    this.dangerouslySkipPermissions = dangerouslySkipPermissions;
   }
 
   /**
@@ -45,6 +48,20 @@ export class WorkerConfiguration {
   }
 
   /**
+   * 権限チェックスキップ設定を設定する
+   */
+  setDangerouslySkipPermissions(skipPermissions: boolean): void {
+    this.dangerouslySkipPermissions = skipPermissions;
+  }
+
+  /**
+   * 権限チェックスキップ設定を取得
+   */
+  getDangerouslySkipPermissions(): boolean {
+    return this.dangerouslySkipPermissions;
+  }
+
+  /**
    * Claudeコマンドの引数を構築
    */
   buildClaudeArgs(prompt: string, sessionId?: string | null): string[] {
@@ -66,8 +83,10 @@ export class WorkerConfiguration {
       args.push("--continue");
     }
 
-    // 常に権限チェックをスキップ
-    args.push("--dangerously-skip-permissions");
+    // 権限チェックスキップが有効な場合のみ
+    if (this.dangerouslySkipPermissions) {
+      args.push("--dangerously-skip-permissions");
+    }
 
     // append-system-promptが設定されている場合
     if (this.appendSystemPrompt) {

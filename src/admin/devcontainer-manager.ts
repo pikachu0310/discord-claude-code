@@ -150,29 +150,20 @@ export class DevcontainerManager {
     message: string;
     components?: DiscordActionRow[];
   }> {
-    this.logVerbose("devcontainer.json未発見", {
+    this.logVerbose("devcontainer.json未発見、自動的にローカル環境で実行", {
       threadId,
     });
 
-    // devcontainer CLIの確認
-    const cliResult = await checkDevcontainerCli();
-    const hasDevcontainerCli = cliResult.isOk() ? cliResult.value : false;
+    // 自動的にローカル環境で実行するように設定
+    const config = {
+      useDevcontainer: false,
+      hasDevcontainerFile: false,
+      hasAnthropicsFeature: false,
+      isStarted: false,
+    };
+    await this.saveDevcontainerConfig(threadId, config);
 
-    if (!hasDevcontainerCli) {
-      // devcontainer CLI未インストールの場合
-      const config = {
-        useDevcontainer: false,
-        hasDevcontainerFile: false,
-        hasAnthropicsFeature: false,
-        isStarted: false,
-      };
-      await this.saveDevcontainerConfig(threadId, config);
-
-      return this.createLocalEnvResponse(threadId);
-    }
-
-    // devcontainer CLIがインストールされている場合
-    return this.createFallbackDevcontainerResponse(threadId);
+    return this.createLocalEnvResponse(threadId);
   }
 
   /**
@@ -268,44 +259,8 @@ export class DevcontainerManager {
     return {
       hasDevcontainer: false,
       message:
-        "devcontainer.jsonが見つかりませんでした。通常のローカル環境でClaudeを実行します。\n\n`--dangerously-skip-permissions`オプションを使用しますか？（権限チェックをスキップします。注意して使用してください）",
+        "devcontainer.jsonが見つからないため、自動的にローカル環境でClaudeを実行します。\n\n`--dangerously-skip-permissions`オプションを使用しますか？（権限チェックをスキップします。注意して使用してください）",
       components: [this.createPermissionButtons(threadId)],
-    };
-  }
-
-  /**
-   * fallback devcontainerの選択肢を作成する
-   */
-  private createFallbackDevcontainerResponse(
-    threadId: string,
-  ): {
-    hasDevcontainer: boolean;
-    message: string;
-    components: DiscordActionRow[];
-  } {
-    return {
-      hasDevcontainer: false,
-      message:
-        "devcontainer.jsonが見つかりませんでした。\n\n以下のオプションから選択してください：\n1. 通常のローカル環境でClaudeを実行\n2. fallback devcontainerを使用（標準的な開発環境をコンテナで提供）",
-      components: [
-        {
-          type: 1,
-          components: [
-            {
-              type: 2,
-              style: 2,
-              label: "ローカル環境で実行",
-              custom_id: `local_env_${threadId}`,
-            },
-            {
-              type: 2,
-              style: 1,
-              label: "fallback devcontainerを使用",
-              custom_id: `fallback_devcontainer_${threadId}`,
-            },
-          ],
-        },
-      ],
     };
   }
 
@@ -613,6 +568,38 @@ export class DevcontainerManager {
 
     // fallback devcontainerを起動
     return "fallback_devcontainer_start_with_progress";
+  }
+
+  /**
+   * 権限チェックありボタンの処理
+   */
+  async handlePermissionsNoSkipButton(
+    threadId: string,
+    worker: IWorker,
+  ): Promise<string> {
+    worker.setUseDevcontainer(false);
+    worker.setDangerouslySkipPermissions(false);
+
+    this.logVerbose("権限チェックありでローカル環境実行を設定", { threadId });
+
+    return "ローカル環境でClaude実行を設定しました（権限チェックあり）。\n\n準備完了です！何かご質問をどうぞ。";
+  }
+
+  /**
+   * 権限チェックスキップボタンの処理
+   */
+  async handlePermissionsSkipButton(
+    threadId: string,
+    worker: IWorker,
+  ): Promise<string> {
+    worker.setUseDevcontainer(false);
+    worker.setDangerouslySkipPermissions(true);
+
+    this.logVerbose("権限チェックスキップでローカル環境実行を設定", {
+      threadId,
+    });
+
+    return "ローカル環境でClaude実行を設定しました（権限チェックスキップ）。\n\n⚠️ 権限チェックがスキップされています。注意してご利用ください。\n\n準備完了です！何かご質問をどうぞ。";
   }
 
   /**

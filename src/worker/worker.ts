@@ -841,6 +841,20 @@ export class Worker implements IWorker {
   }
 
   /**
+   * 権限チェックスキップ設定を設定する
+   */
+  setDangerouslySkipPermissions(skipPermissions: boolean): void {
+    this.configuration.setDangerouslySkipPermissions(skipPermissions);
+  }
+
+  /**
+   * 権限チェックスキップ設定を取得
+   */
+  isDangerouslySkipPermissions(): boolean {
+    return this.configuration.getDangerouslySkipPermissions();
+  }
+
+  /**
    * 設定が完了しているかを確認
    */
   isConfigurationComplete(): boolean {

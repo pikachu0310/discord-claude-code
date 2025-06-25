@@ -29,7 +29,7 @@ Deno.test("Admin devcontainer機能のテスト", async (t) => {
         assertEquals(result.hasDevcontainer, false);
         assertStringIncludes(
           result.message,
-          "devcontainer.jsonが見つかりませんでした",
+          "devcontainer.jsonが見つからないため、自動的にローカル環境でClaudeを実行します",
         );
       } finally {
         await Deno.remove(repoDir, { recursive: true });

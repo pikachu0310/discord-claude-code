@@ -382,6 +382,34 @@ export class Admin implements IAdmin {
       return ok(result);
     }
 
+    // 権限チェックありボタン処理
+    if (customId.startsWith(`permissions_no_skip_${threadId}`)) {
+      const workerResult = this.getWorker(threadId);
+      if (workerResult.isErr()) {
+        return err(workerResult.error);
+      }
+      const result = await this.devcontainerManager
+        .handlePermissionsNoSkipButton(
+          threadId,
+          workerResult.value,
+        );
+      return ok(result);
+    }
+
+    // 権限チェックスキップボタン処理
+    if (customId.startsWith(`permissions_skip_${threadId}`)) {
+      const workerResult = this.getWorker(threadId);
+      if (workerResult.isErr()) {
+        return err(workerResult.error);
+      }
+      const result = await this.devcontainerManager
+        .handlePermissionsSkipButton(
+          threadId,
+          workerResult.value,
+        );
+      return ok(result);
+    }
+
     return ok("未知のボタンが押されました。");
   }
 

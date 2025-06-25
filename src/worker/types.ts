@@ -46,6 +46,7 @@ export interface IWorker {
   isUsingDevcontainer(): boolean;
   setUseDevcontainer(useDevcontainer: boolean): void;
   setUseFallbackDevcontainer(useFallback: boolean): void;
+  setDangerouslySkipPermissions(skipPermissions: boolean): void;
   startDevcontainer(
     onProgress?: (message: string) => Promise<void>,
   ): Promise<{ success: boolean; containerId?: string; error?: string }>;
