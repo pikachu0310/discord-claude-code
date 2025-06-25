@@ -48,9 +48,6 @@ export class MessageRouter {
       hasReactionCallback: !!onReaction,
     });
 
-    // メッセージ受信確認のリアクションを追加
-    await this.addMessageReceivedReaction(threadId, onReaction);
-
     // VERBOSEモードでの詳細ログ出力
     this.logMessageDetails(threadId, message);
 
@@ -71,6 +68,9 @@ export class MessageRouter {
       return err(workerResult.error);
     }
     const worker = workerResult.value;
+
+    // Workerが見つかった場合のみメッセージ受信確認のリアクションを追加
+    await this.addMessageReceivedReaction(threadId, onReaction);
 
     // 監査ログに記録
     await this.logAuditEntry(threadId, "message_received", {
