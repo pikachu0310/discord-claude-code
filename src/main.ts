@@ -721,7 +721,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
 
       // シンプルな初期メッセージを送信
       const greeting =
-        `こんにちは！ 準備ができました！ ${repository.fullName} について何か質問はありますか？`;
+        `こんにちは！ 準備バッチリだよ！ ${repository.fullName} について何でも聞いてね～！`;
 
       // devcontainerの設定ボタンがある場合のみ表示
       const components = devcontainerInfo.components || [];
