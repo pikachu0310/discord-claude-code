@@ -719,24 +719,15 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
         repositoryResult.value.path,
       );
 
-      // 初期メッセージを終了ボタン付きで送信
-      const initialMessage = admin.createInitialMessage(thread.id);
+      // シンプルな初期メッセージを送信
       const greeting =
-        `こんにちは！私は${worker.getName()}です。${repository.fullName}について何か質問はありますか？\n\n`;
+        `こんにちは！ 準備バッチリだよ！ ${repository.fullName} について何でも聞いてね～！`;
 
-      let devcontainerMessage = "";
-      if (devcontainerInfo.warning) {
-        devcontainerMessage += `${devcontainerInfo.warning}\n\n`;
-      }
-      devcontainerMessage += devcontainerInfo.message;
-
-      // devcontainerの設定ボタンがある場合はそれを使用、ない場合は終了ボタンのみ
-      const components = devcontainerInfo.components ||
-        initialMessage.components;
+      // devcontainerの設定ボタンがある場合のみ表示
+      const components = devcontainerInfo.components || [];
 
       await thread.send({
-        content:
-          `${greeting}${devcontainerMessage}\n\n${initialMessage.content}`,
+        content: greeting,
         components: components,
       });
     } catch (error) {

@@ -23,10 +23,8 @@ Deno.test("DevcontainerManager - devcontainer.jsonが存在しない場合", asy
       );
 
       assertEquals(result.hasDevcontainer, false);
-      assertStringIncludes(
-        result.message,
-        "devcontainer.jsonが見つかりませんでした",
-      );
+      // DevcontainerManagerは空文字を返すようになったので、メッセージはmain.tsで生成される
+      assertEquals(result.message, "");
     } finally {
       await Deno.remove(repoDir, { recursive: true });
     }

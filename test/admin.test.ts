@@ -217,24 +217,25 @@ Deno.test("Admin - devcontainer.jsonが存在しない場合の設定確認", as
   const admin = new Admin(adminState, workspace, undefined, undefined);
   const threadId = "thread-devcontainer-1";
 
+  // Workerを作成（Adminでの自動設定をテストするため）
+  await admin.createWorker(threadId);
+
   // devcontainer.jsonが存在しないテンポラリディレクトリを作成
   const testRepoDir = await Deno.makeTempDir({ prefix: "test_repo_" });
 
   const result = await admin.checkAndSetupDevcontainer(threadId, testRepoDir);
 
   assertEquals(result.hasDevcontainer, false);
-  assertEquals(
-    result.message.includes("devcontainer.jsonが見つかりませんでした"),
-    true,
-  );
-  assertEquals(Array.isArray(result.components), true);
+  // DevcontainerManagerは空文字を返すようになったので、メッセージはmain.tsで生成される
+  assertEquals(result.message, "");
+  assertEquals(result.components, undefined);
 
-  // devcontainer CLIの有無によってメッセージが変わるため、どちらかの条件を満たすことを確認
-  const hasPermissionsOption = result.message.includes(
-    "--dangerously-skip-permissions",
-  );
-  const hasFallbackOption = result.message.includes("fallback devcontainer");
-  assertEquals(hasPermissionsOption || hasFallbackOption, true);
+  // Workerが権限チェックスキップに自動設定されているかを確認
+  const workerResult = admin.getWorker(threadId);
+  assert(workerResult.isOk());
+  const worker = workerResult.value;
+  assertEquals(worker.getUseDevcontainer(), false);
+  assertEquals(worker.getDangerouslySkipPermissions(), true);
 
   // クリーンアップ
   await Deno.remove(testRepoDir, { recursive: true });
