@@ -89,7 +89,37 @@ const env = envResult.value;
 const api = new Api({
   baseApiParams: { headers: { Authorization: `Bearer ${env.TRAQ_TOKEN}` } },
 });
+
+// traQ Clientの初期化とエラーハンドリング
 const client = new Client({ token: env.TRAQ_TOKEN });
+
+// WebSocketエラーのハンドリングを追加
+client.on("ERROR", (data) => {
+  console.error("traQ Client WebSocketエラー:", data);
+  // その他の重要なエラーのみログ出力
+  console.error("traQ Client エラー詳細:", data);
+});
+
+// 未処理のWebSocketエラーをキャッチ（Deno対応）
+globalThis.addEventListener("error", (event) => {
+  const error = event.error as Error;
+  if (error?.message?.includes("Buffer") && error.message.includes("ping")) {
+    console.log("WebSocket ping エラー (無視): ", error.message);
+    event.preventDefault(); // エラーを無視
+    return;
+  }
+  console.error("未処理エラー:", error);
+});
+
+globalThis.addEventListener("unhandledrejection", (event) => {
+  const error = event.reason as Error;
+  if (error?.message?.includes("Buffer") && error.message.includes("ping")) {
+    console.log("WebSocket ping Promise rejection (無視): ", error.message);
+    event.preventDefault(); // エラーを無視
+    return;
+  }
+  console.error("未処理Promise rejection:", error);
+});
 
 const workspaceManager = new WorkspaceManager(env.WORK_BASE_DIR);
 await workspaceManager.initialize();
@@ -131,106 +161,122 @@ const COMMANDS = {
 };
 
 // Bot起動時の処理
-client.listen(() => {
-  console.log("traQ Botの起動が完了しました");
+try {
+  client.listen(() => {
+    console.log("traQ Botの起動が完了しました");
 
-  // 自動再開コールバックを設定
-  admin.setAutoResumeCallback(async (threadId: string, message: string) => {
-    try {
-      // 進捗コールバック
-      const onProgress = async (content: string) => {
-        try {
-          await api.channels.postMessage(threadId, { content, embed: true });
-        } catch (sendError) {
-          console.error("自動再開メッセージ送信エラー:", sendError);
+    // 自動再開コールバックを設定
+    admin.setAutoResumeCallback(async (threadId: string, message: string) => {
+      try {
+        // 進捗コールバック
+        const onProgress = async (content: string) => {
+          try {
+            await api.channels.postMessage(threadId, { content, embed: true });
+          } catch (sendError) {
+            console.error("自動再開メッセージ送信エラー:", sendError);
+          }
+        };
+
+        // リアクションコールバック（traQではスタンプを使用）
+        const onReaction = async (emoji: string) => {
+          try {
+            // traQではスタンプでリアクションを表現
+            // スタンプの代わりにメッセージで状態を通知
+            console.log(`リアクション: ${emoji}`);
+          } catch (error) {
+            console.error("自動再開リアクション追加エラー:", error);
+          }
+        };
+
+        const replyResult = await admin.routeMessage(
+          threadId,
+          message,
+          onProgress,
+          onReaction,
+        );
+
+        if (replyResult.isErr()) {
+          console.error("自動再開メッセージ処理エラー:", replyResult.error);
+          return;
         }
-      };
 
-      // リアクションコールバック（traQではスタンプを使用）
-      const onReaction = async (emoji: string) => {
-        try {
-          // traQではスタンプでリアクションを表現
-          // スタンプの代わりにメッセージで状態を通知
-          console.log(`リアクション: ${emoji}`);
-        } catch (error) {
-          console.error("自動再開リアクション追加エラー:", error);
+        const reply = replyResult.value;
+
+        if (typeof reply === "string") {
+          await api.channels.postMessage(threadId, {
+            content: reply,
+            embed: true,
+          });
+        } else {
+          // traQではコンポーネントの代わりにメッセージ本文で情報を表示
+          await api.channels.postMessage(threadId, {
+            content: reply.content,
+            embed: true,
+          });
         }
-      };
-
-      const replyResult = await admin.routeMessage(
-        threadId,
-        message,
-        onProgress,
-        onReaction,
-      );
-
-      if (replyResult.isErr()) {
-        console.error("自動再開メッセージ処理エラー:", replyResult.error);
-        return;
+      } catch (error) {
+        console.error("自動再開メッセージ送信エラー:", error);
       }
+    });
 
-      const reply = replyResult.value;
+    // スレッドクローズコールバックを設定
+    admin.setThreadCloseCallback(async (threadId: string) => {
+      try {
+        // traQでは明示的なスレッドクローズは不要
+        console.log(`スレッドを終了しました: ${threadId}`);
+      } catch (error) {
+        console.error(`スレッドの終了に失敗しました (${threadId}):`, error);
+      }
+    });
 
-      if (typeof reply === "string") {
-        await api.channels.postMessage(threadId, {
-          content: reply,
-          embed: true,
-        });
+    // アクティブなスレッドを復旧
+    console.log("アクティブなスレッドを復旧しています...");
+    admin.restoreActiveThreads().then((restoreResult) => {
+      if (restoreResult.isOk()) {
+        console.log("スレッドの復旧が完了しました。");
       } else {
-        // traQではコンポーネントの代わりにメッセージ本文で情報を表示
-        await api.channels.postMessage(threadId, {
-          content: reply.content,
-          embed: true,
-        });
+        console.error(
+          "スレッドの復旧でエラーが発生しました:",
+          restoreResult.error,
+        );
       }
-    } catch (error) {
-      console.error("自動再開メッセージ送信エラー:", error);
-    }
+    });
+
+    console.log("traQ Botの初期化が完了しました！");
   });
 
-  // スレッドクローズコールバックを設定
-  admin.setThreadCloseCallback(async (threadId: string) => {
-    try {
-      // traQでは明示的なスレッドクローズは不要
-      console.log(`スレッドを終了しました: ${threadId}`);
-    } catch (error) {
-      console.error(`スレッドの終了に失敗しました (${threadId}):`, error);
-    }
-  });
+  // traQではメッセージでコマンドを処理
+  // インタラクションの代わりにメッセージイベントでコマンドを処理
+  client.on("MESSAGE_CREATED", async ({ body }) => {
+    const { user, plainText, channelId, id: messageId } = body.message;
 
-  // アクティブなスレッドを復旧
-  console.log("アクティブなスレッドを復旧しています...");
-  admin.restoreActiveThreads().then((restoreResult) => {
-    if (restoreResult.isOk()) {
-      console.log("スレッドの復旧が完了しました。");
+    // Bot自身のメッセージを無視
+    if (user.bot) return;
+
+    // コマンドメッセージの処理
+    if (plainText.startsWith("/")) {
+      await handleCommand(plainText, channelId, user.id);
     } else {
-      console.error(
-        "スレッドの復旧でエラーが発生しました:",
-        restoreResult.error,
-      );
+      // 通常のメッセージ処理
+      await handleMessage(plainText, channelId, user.id, messageId);
     }
   });
-
-  console.log("traQ Botの初期化が完了しました！");
-});
-
-// traQではメッセージでコマンドを処理
-// インタラクションの代わりにメッセージイベントでコマンドを処理
-client.on("MESSAGE_CREATED", async ({ body }) => {
-  const { user, plainText, channelId, id: messageId } = body.message;
-
-  // Bot自身のメッセージを無視
-  if (user.bot) return;
-
-  // コマンドメッセージの処理
-  if (plainText.startsWith("/")) {
-    await handleCommand(plainText, channelId, user.id);
+} catch (error) {
+  console.error("traQ Bot初期化エラー:", error);
+  if (
+    error instanceof Error && error.message.includes("Buffer") &&
+    error.message.includes("ping")
+  ) {
+    console.log(
+      "WebSocket ping エラーを検出しました。Bot は正常に動作している可能性があります。",
+    );
   } else {
-    // 通常のメッセージ処理
-    await handleMessage(plainText, channelId, user.id, messageId);
+    console.error("予期しないエラーが発生しました:", error);
+    Deno.exit(1);
   }
-});
+}
 
+// 関数定義（モジュールルート）
 async function handleCommand(
   message: string,
   channelId: string,
