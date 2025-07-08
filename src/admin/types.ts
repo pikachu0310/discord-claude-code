@@ -8,7 +8,7 @@ export type AdminError =
   | { type: "THREAD_TERMINATED"; threadId: string }
   | { type: "WORKSPACE_ERROR"; operation: string; error: string };
 
-// Discord関連の型定義
+// traQ関連の型定義（DiscordMessageは互換性のために保持）
 export interface DiscordButtonComponent {
   type: 2;
   style: 1 | 2 | 3 | 4 | 5;
@@ -25,6 +25,12 @@ export interface DiscordActionRow {
 export interface DiscordMessage {
   content: string;
   components?: DiscordActionRow[];
+}
+
+// traQ用のメッセージ型（将来的にDiscordMessageを置き換える）
+export interface TraqMessage {
+  content: string;
+  embed?: boolean;
 }
 
 // Admin関連のインターフェース

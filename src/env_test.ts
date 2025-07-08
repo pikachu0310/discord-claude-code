@@ -3,7 +3,7 @@ import { getEnv } from "./env.ts";
 
 Deno.test("getEnv - 必要な環境変数が設定されている場合は成功する", () => {
   // 環境変数を設定
-  Deno.env.set("DISCORD_TOKEN", "test-token");
+  Deno.env.set("TRAQ_TOKEN", "test-token");
   Deno.env.set("WORK_BASE_DIR", "/test/work");
   // VERBOSEを明示的に削除して未設定状態にする
   Deno.env.delete("VERBOSE");
@@ -12,19 +12,19 @@ Deno.test("getEnv - 必要な環境変数が設定されている場合は成功
 
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    assertEquals(result.value.DISCORD_TOKEN, "test-token");
+    assertEquals(result.value.TRAQ_TOKEN, "test-token");
     assertEquals(result.value.WORK_BASE_DIR, "/test/work");
     assertEquals(result.value.VERBOSE, false);
   }
 
   // クリーンアップ
-  Deno.env.delete("DISCORD_TOKEN");
+  Deno.env.delete("TRAQ_TOKEN");
   Deno.env.delete("WORK_BASE_DIR");
 });
 
-Deno.test("getEnv - DISCORD_TOKENが設定されていない場合はエラーを返す", () => {
-  // DISCORD_TOKENを削除
-  Deno.env.delete("DISCORD_TOKEN");
+Deno.test("getEnv - TRAQ_TOKENが設定されていない場合はエラーを返す", () => {
+  // TRAQ_TOKENを削除
+  Deno.env.delete("TRAQ_TOKEN");
   Deno.env.set("WORK_BASE_DIR", "/test/work");
 
   const result = getEnv();
@@ -32,8 +32,8 @@ Deno.test("getEnv - DISCORD_TOKENが設定されていない場合はエラー�
   assertEquals(result.isErr(), true);
   if (result.isErr()) {
     assertEquals(result.error.type, "MISSING_ENV_VAR");
-    assertEquals(result.error.variable, "DISCORD_TOKEN");
-    assertEquals(result.error.message, "DISCORD_TOKEN is not set");
+    assertEquals(result.error.variable, "TRAQ_TOKEN");
+    assertEquals(result.error.message, "TRAQ_TOKEN is not set");
   }
 
   // クリーンアップ
@@ -42,7 +42,7 @@ Deno.test("getEnv - DISCORD_TOKENが設定されていない場合はエラー�
 
 Deno.test("getEnv - WORK_BASE_DIRが設定されていない場合はエラーを返す", () => {
   // WORK_BASE_DIRを削除
-  Deno.env.set("DISCORD_TOKEN", "test-token");
+  Deno.env.set("TRAQ_TOKEN", "test-token");
   Deno.env.delete("WORK_BASE_DIR");
 
   const result = getEnv();
@@ -55,12 +55,12 @@ Deno.test("getEnv - WORK_BASE_DIRが設定されていない場合はエラー�
   }
 
   // クリーンアップ
-  Deno.env.delete("DISCORD_TOKEN");
+  Deno.env.delete("TRAQ_TOKEN");
 });
 
 Deno.test("getEnv - オプション環境変数が正しく読み込まれる", () => {
   // 環境変数を設定
-  Deno.env.set("DISCORD_TOKEN", "test-token");
+  Deno.env.set("TRAQ_TOKEN", "test-token");
   Deno.env.set("WORK_BASE_DIR", "/test/work");
   Deno.env.set("VERBOSE", "true");
   Deno.env.set("CLAUDE_APPEND_SYSTEM_PROMPT", "test prompt");
@@ -78,7 +78,7 @@ Deno.test("getEnv - オプション環境変数が正しく読み込まれる", 
   }
 
   // クリーンアップ
-  Deno.env.delete("DISCORD_TOKEN");
+  Deno.env.delete("TRAQ_TOKEN");
   Deno.env.delete("WORK_BASE_DIR");
   Deno.env.delete("VERBOSE");
   Deno.env.delete("CLAUDE_APPEND_SYSTEM_PROMPT");
@@ -88,7 +88,7 @@ Deno.test("getEnv - オプション環境変数が正しく読み込まれる", 
 
 Deno.test("getEnv - VERBOSEがfalse値の場合はfalseになる", () => {
   // 環境変数を設定
-  Deno.env.set("DISCORD_TOKEN", "test-token");
+  Deno.env.set("TRAQ_TOKEN", "test-token");
   Deno.env.set("WORK_BASE_DIR", "/test/work");
   Deno.env.set("VERBOSE", "false");
 
@@ -100,7 +100,7 @@ Deno.test("getEnv - VERBOSEがfalse値の場合はfalseになる", () => {
   }
 
   // クリーンアップ
-  Deno.env.delete("DISCORD_TOKEN");
+  Deno.env.delete("TRAQ_TOKEN");
   Deno.env.delete("WORK_BASE_DIR");
   Deno.env.delete("VERBOSE");
 });
