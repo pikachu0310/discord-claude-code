@@ -93,12 +93,7 @@ const api = new Api({
 // traQ Clientの初期化とエラーハンドリング
 const client = new Client({ token: env.TRAQ_TOKEN });
 
-// WebSocketエラーのハンドリングを追加
-client.on("ERROR", (data) => {
-  console.error("traQ Client WebSocketエラー:", data);
-  // その他の重要なエラーのみログ出力
-  console.error("traQ Client エラー詳細:", data);
-});
+// WebSocketエラーのハンドリングは traQ Client内部で処理されるためカスタムハンドラは不要
 
 // 未処理のWebSocketエラーをキャッチ（Deno対応）
 globalThis.addEventListener("error", (event) => {
