@@ -50,12 +50,22 @@ export class DefaultClaudeCommandExecutor implements ClaudeCommandExecutor {
     }
 
     try {
+      // nvm環境を含むPATHを設定
+      const env = { ...Deno.env.toObject() };
+      const nvmNodePath = `${env.HOME}/.local/share/nvm/v22.15.0/bin`;
+      
+      // PATHにnvmのパスを追加（存在する場合）
+      if (env.PATH && !env.PATH.includes(nvmNodePath)) {
+        env.PATH = `${nvmNodePath}:${env.PATH}`;
+      }
+
       const command = new Deno.Command("claude", {
         args,
         cwd,
         stdout: "piped",
         stderr: "piped",
         signal: abortSignal,
+        env,
       });
 
       const process = command.spawn();

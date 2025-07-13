@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "context7": {
-      "command": "https://mcp.context7.com/sse",
-      "transport": "sse"
-    }
-  }
-}

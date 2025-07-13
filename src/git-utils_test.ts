@@ -117,7 +117,7 @@ Deno.test("ensureRepository - 新規リポジトリのクローンをスキッ�
   }
 });
 
-Deno.test("createWorktreeCopy - .claude.jsonファイルがコピーされることを確認", async () => {
+Deno.test("createWorktreeCopy - .mcp.jsonファイルがコピーされることを確認", async () => {
   const { createWorktreeCopy } = await import("./git-utils.ts");
   const tempDir = await Deno.makeTempDir();
 
@@ -136,18 +136,18 @@ Deno.test("createWorktreeCopy - .claude.jsonファイルがコピーされるこ
       throw new Error("git init failed");
     }
 
-    // .claude.jsonファイルを作成
-    const claudeConfig = {
+    // .mcp.jsonファイルを作成
+    const mcpConfig = {
       mcpServers: {
         context7: {
-          command: "https://mcp.context7.com/sse",
-          transport: "sse"
+          type: "sse",
+          url: "https://mcp.context7.com/sse"
         }
       }
     };
     await Deno.writeTextFile(
-      join(sourceRepo, ".claude.json"),
-      JSON.stringify(claudeConfig, null, 2)
+      join(sourceRepo, ".mcp.json"),
+      JSON.stringify(mcpConfig, null, 2)
     );
 
     // 初期コミットを作成
@@ -178,16 +178,16 @@ Deno.test("createWorktreeCopy - .claude.jsonファイルがコピーされるこ
     const result = await createWorktreeCopy(sourceRepo, branchName, worktreeDir);
     assertEquals(result.isOk(), true);
 
-    // .claude.jsonファイルがコピーされていることを確認
-    const claudeJsonPath = join(worktreeDir, ".claude.json");
-    const exists = await Deno.stat(claudeJsonPath).then(() => true).catch(() => false);
-    assertEquals(exists, true, ".claude.jsonファイルがコピーされていません");
+    // .mcp.jsonファイルがコピーされていることを確認
+    const mcpJsonPath = join(worktreeDir, ".mcp.json");
+    const exists = await Deno.stat(mcpJsonPath).then(() => true).catch(() => false);
+    assertEquals(exists, true, ".mcp.jsonファイルがコピーされていません");
 
     // ファイル内容が正しいことを確認
-    const copiedContent = await Deno.readTextFile(claudeJsonPath);
+    const copiedContent = await Deno.readTextFile(mcpJsonPath);
     const parsedContent = JSON.parse(copiedContent);
-    assertEquals(parsedContent.mcpServers.context7.command, "https://mcp.context7.com/sse");
-    assertEquals(parsedContent.mcpServers.context7.transport, "sse");
+    assertEquals(parsedContent.mcpServers.context7.type, "sse");
+    assertEquals(parsedContent.mcpServers.context7.url, "https://mcp.context7.com/sse");
   } finally {
     await Deno.remove(tempDir, { recursive: true });
   }
