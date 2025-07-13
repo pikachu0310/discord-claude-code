@@ -116,3 +116,79 @@ Deno.test("ensureRepository - 新規リポジトリのクローンをスキッ�
     await Deno.remove(tempDir, { recursive: true });
   }
 });
+
+Deno.test("createWorktreeCopy - .claude.jsonファイルがコピーされることを確認", async () => {
+  const { createWorktreeCopy } = await import("./git-utils.ts");
+  const tempDir = await Deno.makeTempDir();
+
+  try {
+    // テスト用のソースディレクトリを作成
+    const sourceRepo = join(tempDir, "source");
+    await Deno.mkdir(sourceRepo);
+
+    // git init でリポジトリを初期化
+    const initCommand = new Deno.Command("git", {
+      args: ["init"],
+      cwd: sourceRepo,
+    });
+    const initResult = await initCommand.output();
+    if (!initResult.success) {
+      throw new Error("git init failed");
+    }
+
+    // .claude.jsonファイルを作成
+    const claudeConfig = {
+      mcpServers: {
+        context7: {
+          command: "https://mcp.context7.com/sse",
+          transport: "sse"
+        }
+      }
+    };
+    await Deno.writeTextFile(
+      join(sourceRepo, ".claude.json"),
+      JSON.stringify(claudeConfig, null, 2)
+    );
+
+    // 初期コミットを作成
+    const addCommand = new Deno.Command("git", {
+      args: ["add", "."],
+      cwd: sourceRepo,
+    });
+    await addCommand.output();
+
+    const commitCommand = new Deno.Command("git", {
+      args: ["commit", "-m", "Initial commit"],
+      cwd: sourceRepo,
+      env: {
+        ...Deno.env.toObject(),
+        GIT_AUTHOR_NAME: "Test",
+        GIT_AUTHOR_EMAIL: "test@example.com",
+        GIT_COMMITTER_NAME: "Test",
+        GIT_COMMITTER_EMAIL: "test@example.com",
+      },
+    });
+    await commitCommand.output();
+
+    // worktreeディレクトリを作成
+    const worktreeDir = join(tempDir, "worktree");
+    const branchName = "test-branch";
+
+    // createWorktreeCopyを実行
+    const result = await createWorktreeCopy(sourceRepo, branchName, worktreeDir);
+    assertEquals(result.isOk(), true);
+
+    // .claude.jsonファイルがコピーされていることを確認
+    const claudeJsonPath = join(worktreeDir, ".claude.json");
+    const exists = await Deno.stat(claudeJsonPath).then(() => true).catch(() => false);
+    assertEquals(exists, true, ".claude.jsonファイルがコピーされていません");
+
+    // ファイル内容が正しいことを確認
+    const copiedContent = await Deno.readTextFile(claudeJsonPath);
+    const parsedContent = JSON.parse(copiedContent);
+    assertEquals(parsedContent.mcpServers.context7.command, "https://mcp.context7.com/sse");
+    assertEquals(parsedContent.mcpServers.context7.transport, "sse");
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
