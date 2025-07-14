@@ -11,6 +11,7 @@ import { RateLimitManager } from "./rate-limit-manager.ts";
 import { DevcontainerManager } from "./devcontainer-manager.ts";
 import { MessageRouter } from "./message-router.ts";
 import { err, ok, Result } from "neverthrow";
+import type { Client } from "discord.js";
 
 export class Admin implements IAdmin {
   private state: AdminState;
@@ -514,6 +515,13 @@ export class Admin implements IAdmin {
     callback: (threadId: string, message: string) => Promise<void>,
   ): void {
     this.rateLimitManager.setAutoResumeCallback(callback);
+  }
+
+  /**
+   * DiscordクライアントをRateLimitManagerに設定する
+   */
+  setDiscordClient(client: Client): void {
+    this.rateLimitManager.setDiscordClient(client);
   }
 
   /**

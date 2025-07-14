@@ -5,12 +5,15 @@ import type {
 } from "../workspace/workspace.ts";
 import { WorkspaceManager } from "../workspace/workspace.ts";
 import { RATE_LIMIT } from "../constants.ts";
+import type { Client } from "discord.js";
+import { ActivityType, PresenceUpdateStatus } from "discord.js";
 
 export class RateLimitManager {
   private autoResumeTimers: Map<string, ReturnType<typeof setTimeout>> =
     new Map();
   private workspaceManager: WorkspaceManager;
   private verbose: boolean;
+  private discordClient?: Client;
   private onAutoResumeMessage?: (
     threadId: string,
     message: string,
@@ -22,6 +25,13 @@ export class RateLimitManager {
   ) {
     this.workspaceManager = workspaceManager;
     this.verbose = verbose;
+  }
+
+  /**
+   * DiscordクライアントをRateLimitManagerに設定する
+   */
+  setDiscordClient(client: Client): void {
+    this.discordClient = client;
   }
 
   /**
@@ -50,6 +60,9 @@ export class RateLimitManager {
 
         // タイマーを設定
         this.scheduleAutoResume(threadId, timestamp);
+
+        // Discordステータスを更新
+        await this.updateDiscordStatusForRateLimit(timestamp);
 
         await this.logAuditEntry(threadId, "rate_limit_detected", {
           timestamp,
@@ -212,6 +225,9 @@ export class RateLimitManager {
       workerState.rateLimitTimestamp = undefined;
       workerState.autoResumeAfterRateLimit = undefined;
       await this.workspaceManager.saveWorkerState(workerState);
+
+      // Discordステータスを通常に戻す
+      await this.updateDiscordStatusToNormal();
 
       // キューに溜まったメッセージを処理
       const queuedMessages = workerState.queuedMessages || [];
@@ -434,6 +450,65 @@ export class RateLimitManager {
       await this.workspaceManager.appendAuditLog(auditEntry);
     } catch (error) {
       console.error("監査ログの記録に失敗しました:", error);
+    }
+  }
+
+  /**
+   * レートリミット時にDiscordステータスを更新する
+   */
+  private async updateDiscordStatusForRateLimit(
+    timestamp: number,
+  ): Promise<void> {
+    if (!this.discordClient) {
+      return;
+    }
+
+    try {
+      const resumeTime = new Date(
+        timestamp * 1000 + RATE_LIMIT.AUTO_RESUME_DELAY_MS,
+      );
+      const resumeTimeStr = resumeTime.toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      await this.discordClient.user?.setPresence({
+        activities: [{
+          name: `制限中 - ${resumeTimeStr}頃復旧予定`,
+          type: ActivityType.Watching,
+        }],
+        status: PresenceUpdateStatus.DoNotDisturb,
+      });
+
+      this.logVerbose("Discord ステータスを制限中に更新", {
+        resumeTime: resumeTimeStr,
+      });
+    } catch (error) {
+      console.error("Discord ステータス更新に失敗しました:", error);
+    }
+  }
+
+  /**
+   * Discordステータスを通常に戻す
+   */
+  private async updateDiscordStatusToNormal(): Promise<void> {
+    if (!this.discordClient) {
+      return;
+    }
+
+    try {
+      await this.discordClient.user?.setPresence({
+        activities: [{
+          name: "Claude Code Bot で開発支援中",
+          type: ActivityType.Playing,
+        }],
+        status: PresenceUpdateStatus.Online,
+      });
+
+      this.logVerbose("Discord ステータスを通常に復旧");
+    } catch (error) {
+      console.error("Discord ステータス復旧に失敗しました:", error);
     }
   }
 

@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   AutocompleteInteraction,
   ButtonInteraction,
   ChannelType,
@@ -9,6 +10,7 @@ import {
   Message,
   Partials,
   PermissionFlagsBits,
+  PresenceUpdateStatus,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -198,6 +200,18 @@ const commands = [
 // Bot起動時の処理
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`ログイン完了: ${readyClient.user.tag}`);
+
+  // 初期プレゼンス設定
+  await readyClient.user.setPresence({
+    activities: [{
+      name: "Claude Code Bot で開発支援中",
+      type: ActivityType.Playing,
+    }],
+    status: PresenceUpdateStatus.Online,
+  });
+
+  // DiscordクライアントをAdminに設定
+  admin.setDiscordClient(readyClient);
 
   // 自動再開コールバックを設定
   admin.setAutoResumeCallback(async (threadId: string, message: string) => {

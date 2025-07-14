@@ -66,6 +66,7 @@ export interface IAdmin {
   setAutoResumeCallback(
     callback: (threadId: string, message: string) => Promise<void>,
   ): void;
+  setDiscordClient(client: import("discord.js").Client): void;
   setThreadCloseCallback(
     callback: (threadId: string) => Promise<void>,
   ): void;
