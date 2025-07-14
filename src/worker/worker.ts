@@ -297,6 +297,7 @@ export class Worker implements IWorker {
           processId: childProcess.pid,
         });
       },
+      this.configuration.buildClaudeEnv(),
     );
 
     if (executionResult.isErr()) {

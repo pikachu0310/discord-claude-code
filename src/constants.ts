@@ -51,3 +51,11 @@ export const PLAMO_TRANSLATOR = {
 export const PROCESS = {
   TERMINATION_TIMEOUT_MS: 5000, // プロセス終了を待つタイムアウト時間（5秒）
 } as const;
+
+// Claude CLI関連の定数
+export const CLAUDE_CLI = {
+  // Claude CLIのデフォルト最大出力トークン数
+  // Claude Code公式ドキュメントには明示的なデフォルト値の記載がないため、
+  // MCPツールのデフォルト制限値（25,000）を参考にした適切な値を設定
+  DEFAULT_MAX_OUTPUT_TOKENS: 25000,
+} as const;

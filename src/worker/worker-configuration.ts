@@ -1,3 +1,5 @@
+import { CLAUDE_CLI } from "../constants.ts";
+
 /**
  * Workerの設定管理を担当するクラス
  */
@@ -6,17 +8,24 @@ export class WorkerConfiguration {
   private appendSystemPrompt?: string;
   private translatorUrl?: string;
   private dangerouslySkipPermissions: boolean;
+  private maxOutputTokens: number;
 
   constructor(
     verbose = false,
     appendSystemPrompt?: string,
     translatorUrl?: string,
     dangerouslySkipPermissions = true, // デフォルトはtrue（既存の動作を維持）
+    maxOutputTokens?: number,
   ) {
     this.verbose = verbose;
     this.appendSystemPrompt = appendSystemPrompt;
     this.translatorUrl = translatorUrl;
     this.dangerouslySkipPermissions = dangerouslySkipPermissions;
+
+    // 環境変数からトークン制限を取得、未設定の場合はデフォルト値を使用
+    this.maxOutputTokens = maxOutputTokens ||
+      this.getMaxOutputTokensFromEnv() ||
+      CLAUDE_CLI.DEFAULT_MAX_OUTPUT_TOKENS;
   }
 
   /**
@@ -62,6 +71,36 @@ export class WorkerConfiguration {
   }
 
   /**
+   * 環境変数から最大出力トークン数を取得
+   */
+  private getMaxOutputTokensFromEnv(): number | null {
+    const envValue = Deno.env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
+    if (envValue) {
+      const parsed = parseInt(envValue, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 最大出力トークン数を設定
+   */
+  setMaxOutputTokens(tokens: number): void {
+    if (tokens > 0) {
+      this.maxOutputTokens = tokens;
+    }
+  }
+
+  /**
+   * 最大出力トークン数を取得
+   */
+  getMaxOutputTokens(): number {
+    return this.maxOutputTokens;
+  }
+
+  /**
    * Claudeコマンドの引数を構築
    */
   buildClaudeArgs(prompt: string, sessionId?: string | null): string[] {
@@ -94,6 +133,18 @@ export class WorkerConfiguration {
     }
 
     return args;
+  }
+
+  /**
+   * Claude CLIの実行に必要な環境変数を構築
+   */
+  buildClaudeEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+
+    // 最大出力トークン数を環境変数として設定
+    env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = this.maxOutputTokens.toString();
+
+    return env;
   }
 
   /**

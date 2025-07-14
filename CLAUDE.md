@@ -109,6 +109,10 @@ WORK_BASE_DIR/
   Claude実行時に追加するシステムプロンプト（オプション）
   - Claude CLIの`--append-system-prompt`オプションに渡される
   - 既存のシステムプロンプトに追加の指示を与えたい場合に使用
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS`: Claude CLIの最大出力トークン数（オプション）
+  - Claude CLIの環境変数`CLAUDE_CODE_MAX_OUTPUT_TOKENS`として設定される
+  - デフォルト値: 25,000（MCPツールのデフォルト制限値と同様）
+  - 正の整数値のみ有効、無効な値の場合はデフォルト値を使用
 - `GEMINI_API_KEY`: Google Gemini APIキー（オプション）
   - 設定されている場合、最初のユーザーメッセージを要約してスレッド名を自動生成
   - スレッド名のフォーマット: `${指示の要約}(${リポジトリ名})`

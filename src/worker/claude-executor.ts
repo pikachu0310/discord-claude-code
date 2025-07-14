@@ -11,6 +11,7 @@ export interface ClaudeCommandExecutor {
    * @param onData 標準出力データを受信したときのコールバック
    * @param abortSignal プロセスを中断するためのシグナル
    * @param onProcessStart プロセスが正常に生成された場合のみ呼ばれるコールバック。プロセス生成に失敗した場合は呼ばれない
+   * @param env Claude CLIに渡す追加の環境変数
    * @returns 実行結果（終了コードと標準エラー出力）またはエラー
    */
   executeStreaming(
@@ -19,6 +20,7 @@ export interface ClaudeCommandExecutor {
     onData: (data: Uint8Array) => void,
     abortSignal?: AbortSignal,
     onProcessStart?: (childProcess: Deno.ChildProcess) => void,
+    env?: Record<string, string>,
   ): Promise<Result<{ code: number; stderr: Uint8Array }, ClaudeExecutorError>>;
 }
 
@@ -35,6 +37,7 @@ export class DefaultClaudeCommandExecutor implements ClaudeCommandExecutor {
     onData: (data: Uint8Array) => void,
     abortSignal?: AbortSignal,
     onProcessStart?: (childProcess: Deno.ChildProcess) => void,
+    env?: Record<string, string>,
   ): Promise<
     Result<{ code: number; stderr: Uint8Array }, ClaudeExecutorError>
   > {
@@ -47,15 +50,22 @@ export class DefaultClaudeCommandExecutor implements ClaudeCommandExecutor {
       );
       console.log(`  作業ディレクトリ: ${cwd}`);
       console.log(`  引数: ${JSON.stringify(args)}`);
+      if (env && Object.keys(env).length > 0) {
+        console.log(`  追加環境変数: ${JSON.stringify(env)}`);
+      }
     }
 
     try {
+      // 現在の環境変数に追加の環境変数をマージ
+      const commandEnv = env ? { ...Deno.env.toObject(), ...env } : undefined;
+
       const command = new Deno.Command("claude", {
         args,
         cwd,
         stdout: "piped",
         stderr: "piped",
         signal: abortSignal,
+        env: commandEnv,
       });
 
       const process = command.spawn();
@@ -123,6 +133,7 @@ export class DevcontainerClaudeExecutor implements ClaudeCommandExecutor {
     onData: (data: Uint8Array) => void,
     abortSignal?: AbortSignal,
     onProcessStart?: (childProcess: Deno.ChildProcess) => void,
+    additionalEnv?: Record<string, string>,
   ): Promise<
     Result<{ code: number; stderr: Uint8Array }, ClaudeExecutorError>
   > {
@@ -142,6 +153,9 @@ export class DevcontainerClaudeExecutor implements ClaudeCommandExecutor {
       );
       console.log(`  リポジトリパス: ${this.repositoryPath}`);
       console.log(`  引数: ${JSON.stringify(argsWithDefaults)}`);
+      if (additionalEnv && Object.keys(additionalEnv).length > 0) {
+        console.log(`  追加環境変数: ${JSON.stringify(additionalEnv)}`);
+      }
     }
 
     try {
@@ -155,6 +169,11 @@ export class DevcontainerClaudeExecutor implements ClaudeCommandExecutor {
       if (this.ghToken) {
         env.GH_TOKEN = this.ghToken;
         env.GITHUB_TOKEN = this.ghToken; // 互換性のため両方設定
+      }
+
+      // 追加の環境変数をマージ
+      if (additionalEnv) {
+        Object.assign(env, additionalEnv);
       }
 
       const devcontainerCommand = new Deno.Command("devcontainer", {
