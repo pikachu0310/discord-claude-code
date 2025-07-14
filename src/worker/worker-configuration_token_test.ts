@@ -1,4 +1,7 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.214.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertExists,
+} from "https://deno.land/std@0.214.0/assert/mod.ts";
 import { WorkerConfiguration } from "./worker-configuration.ts";
 import { CLAUDE_CLI } from "../constants.ts";
 
