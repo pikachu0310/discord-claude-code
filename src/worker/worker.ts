@@ -3,6 +3,7 @@ import { WorkerState, WorkspaceManager } from "../workspace/workspace.ts";
 import { PLaMoTranslator } from "../plamo-translator.ts";
 import { MessageFormatter } from "./message-formatter.ts";
 import {
+  ClaudeCodePromptTooLongError,
   ClaudeCodeRateLimitError,
   type ClaudeStreamMessage,
   ClaudeStreamProcessor,
@@ -194,6 +195,20 @@ export class Worker implements IWorker {
           type: "RATE_LIMIT",
           retryAt: error.retryAt,
           timestamp: error.timestamp,
+        });
+      }
+      if (error instanceof ClaudeCodePromptTooLongError) {
+        this.logVerbose("プロンプト長制限エラーによるセッション終了", {
+          numTurns: error.numTurns,
+          sessionId: this.state.sessionId,
+        });
+        console.warn(
+          `Worker ${this.state.workerName} - プロンプトが長すぎます (${error.numTurns}ターン)。新しいセッションが必要です。`,
+        );
+        return err({
+          type: "PROMPT_TOO_LONG",
+          numTurns: error.numTurns,
+          message: error.message,
         });
       }
       this.logVerbose("メッセージ処理エラー", {
@@ -424,6 +439,9 @@ export class Worker implements IWorker {
       if (parseError instanceof ClaudeCodeRateLimitError) {
         throw parseError;
       }
+      if (parseError instanceof ClaudeCodePromptTooLongError) {
+        throw parseError;
+      }
 
       // エラーの種類に応じて詳細なログを出力
       if (parseError instanceof JsonParseError) {
@@ -481,7 +499,19 @@ export class Worker implements IWorker {
         resultLength: parsed.result.length,
         subtype: parsed.subtype,
         isError: parsed.is_error,
+        numTurns: "num_turns" in parsed ? parsed.num_turns : "unknown",
       });
+
+      // セッション長の監視とログ出力
+      if ("num_turns" in parsed && parsed.num_turns > 100) {
+        console.warn(
+          `Worker ${this.state.workerName} - セッションが長くなっています (${parsed.num_turns}ターン)`,
+        );
+        this.logVerbose("長期セッション警告", {
+          numTurns: parsed.num_turns,
+          sessionId: parsed.session_id,
+        });
+      }
 
       // Claude Codeレートリミットの検出
       if (parsed.result.includes("Claude AI usage limit reached|")) {
@@ -493,6 +523,17 @@ export class Worker implements IWorker {
             Number.parseInt(match[1], 10),
           );
         }
+      }
+
+      // プロンプト長制限エラーの検出
+      if (parsed.result.includes("Prompt is too long")) {
+        this.logVerbose("プロンプト長制限エラー検出", {
+          numTurns: "num_turns" in parsed ? parsed.num_turns : "unknown",
+          sessionId: parsed.session_id,
+        });
+        throw new ClaudeCodePromptTooLongError(
+          "num_turns" in parsed ? parsed.num_turns : 0,
+        );
       }
     }
   }

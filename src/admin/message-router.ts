@@ -246,6 +246,10 @@ export class MessageRouter {
           case "SESSION_LOG_FAILED":
           case "DEVCONTAINER_START_FAILED":
             return ok(`エラーが発生しました: ${error.error}`);
+          case "PROMPT_TOO_LONG":
+            return ok(
+              `セッションが長すぎるため、新しいセッションを開始してください。(${error.numTurns}ターン到達)`,
+            );
           default:
             // Never型になるはずなので、全てのケースがカバーされている
             return error satisfies never;

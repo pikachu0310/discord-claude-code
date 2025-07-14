@@ -4,6 +4,7 @@ export type WorkerError =
   | { type: "CONFIGURATION_INCOMPLETE" }
   | { type: "CLAUDE_EXECUTION_FAILED"; error: string }
   | { type: "RATE_LIMIT"; retryAt: number; timestamp: number }
+  | { type: "PROMPT_TOO_LONG"; numTurns: number; message: string }
   | { type: "TRANSLATION_FAILED"; error: string }
   | { type: "SESSION_LOG_FAILED"; operation: string; error: string }
   | { type: "DEVCONTAINER_START_FAILED"; error: string }

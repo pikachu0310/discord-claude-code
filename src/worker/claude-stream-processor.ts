@@ -91,6 +91,16 @@ export class ClaudeCodeRateLimitError extends Error {
   }
 }
 
+export class ClaudeCodePromptTooLongError extends Error {
+  public readonly numTurns: number;
+
+  constructor(numTurns: number) {
+    super(`Prompt is too long after ${numTurns} turns`);
+    this.name = "ClaudeCodePromptTooLongError";
+    this.numTurns = numTurns;
+  }
+}
+
 /**
  * Claude CLIのストリーミング出力を処理するクラス
  */
