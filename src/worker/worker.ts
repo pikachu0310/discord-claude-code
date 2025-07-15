@@ -446,9 +446,27 @@ export class Worker implements IWorker {
         console.warn(`予期しないエラー: ${parseError}`);
       }
 
-      // JSONとしてパースできなかった場合は全文を投稿
-      if (onProgress && line.trim()) {
-        onProgress(this.formatter.formatResponse(line)).catch(console.error);
+      // JSONとしてパースできなかった場合もレートリミットをチェック
+      if (line.trim()) {
+        // Claude Codeレートリミットの検出（生テキスト内）
+        if (line.includes("Claude AI usage limit reached|")) {
+          this.logVerbose("Claude Codeレートリミット検出（生テキスト内）", {
+            line: line.substring(0, 200),
+          });
+          const match = line.match(
+            /Claude AI usage limit reached\|(\d+)/,
+          );
+          if (match) {
+            throw new ClaudeCodeRateLimitError(
+              Number.parseInt(match[1], 10),
+            );
+          }
+        }
+
+        // 全文を投稿
+        if (onProgress) {
+          onProgress(this.formatter.formatResponse(line)).catch(console.error);
+        }
       }
     }
   }
@@ -466,6 +484,24 @@ export class Worker implements IWorker {
         }
       }
       if (textResult) {
+        // Claude Codeレートリミットの検出（assistantメッセージ内）
+        if (textResult.includes("Claude AI usage limit reached|")) {
+          this.logVerbose(
+            "Claude Codeレートリミット検出（assistantメッセージ内）",
+            {
+              textResult: textResult.substring(0, 200),
+            },
+          );
+          const match = textResult.match(
+            /Claude AI usage limit reached\|(\d+)/,
+          );
+          if (match) {
+            throw new ClaudeCodeRateLimitError(
+              Number.parseInt(match[1], 10),
+            );
+          }
+        }
+
         // 既存の結果に追加する形で更新
         updateState({ result: state.result + textResult });
       }
@@ -486,6 +522,9 @@ export class Worker implements IWorker {
 
       // Claude Codeレートリミットの検出
       if (parsed.result.includes("Claude AI usage limit reached|")) {
+        this.logVerbose("Claude Codeレートリミット検出（resultメッセージ内）", {
+          result: parsed.result.substring(0, 200),
+        });
         const match = parsed.result.match(
           /Claude AI usage limit reached\|(\d+)/,
         );
