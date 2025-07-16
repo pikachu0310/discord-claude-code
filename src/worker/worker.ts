@@ -19,6 +19,7 @@ import {
 import type { IWorker, WorkerError } from "./types.ts";
 import { err, ok, Result } from "neverthrow";
 import { PROCESS } from "../constants.ts";
+import { ContextCompressor } from "../services/context-compressor.ts";
 
 export class Worker implements IWorker {
   private state: WorkerState;
@@ -26,6 +27,7 @@ export class Worker implements IWorker {
   private readonly workspaceManager: WorkspaceManager;
   private readonly configuration: WorkerConfiguration;
   private readonly sessionLogger: SessionLogger;
+  private readonly contextCompressor: ContextCompressor;
   private formatter: MessageFormatter;
   private translator: PLaMoTranslator | null = null;
   private claudeProcess: Deno.ChildProcess | null = null;
@@ -50,6 +52,7 @@ export class Worker implements IWorker {
       translatorUrl,
     );
     this.sessionLogger = new SessionLogger(workspaceManager);
+    this.contextCompressor = new ContextCompressor();
     this.formatter = new MessageFormatter(state.worktreePath || undefined);
     this.claudeExecutor = claudeExecutor ||
       new DefaultClaudeCommandExecutor(this.configuration.isVerbose());
@@ -238,15 +241,20 @@ You are in plan mode. When responding to user requests, you should:
 
 For research, analysis, or informational tasks, do not use the exit_plan_mode tool.
 `;
-      
+
       const modifiedArgs = [...args];
-      const systemPromptIndex = modifiedArgs.findIndex(arg => arg === '--append-system-prompt');
-      if (systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1) {
-        modifiedArgs[systemPromptIndex + 1] = modifiedArgs[systemPromptIndex + 1] + planModePrompt;
+      const systemPromptIndex = modifiedArgs.findIndex((arg) =>
+        arg === "--append-system-prompt"
+      );
+      if (
+        systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1
+      ) {
+        modifiedArgs[systemPromptIndex + 1] =
+          modifiedArgs[systemPromptIndex + 1] + planModePrompt;
       } else {
-        modifiedArgs.push('--append-system-prompt', planModePrompt);
+        modifiedArgs.push("--append-system-prompt", planModePrompt);
       }
-      
+
       this.logVerbose("Planモード用システムプロンプト追加");
       args.splice(0, args.length, ...modifiedArgs);
     }
@@ -310,6 +318,9 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
         type: "REPOSITORY_NOT_SET",
       });
     }
+
+    // コンテキスト圧縮を実行
+    await this.checkAndCompressContext();
 
     const executionResult = await this.claudeExecutor.executeStreaming(
       args,
@@ -1365,5 +1376,101 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
     }
 
     return worker;
+  }
+
+  /**
+   * コンテキスト圧縮の必要性をチェックし、必要であれば圧縮を実行
+   */
+  private async checkAndCompressContext(): Promise<void> {
+    if (!this.state.sessionId || !this.state.repository?.fullName) {
+      return;
+    }
+
+    try {
+      // 現在のセッションファイルの内容を取得
+      const sessionContent = await this.getCurrentSessionContent();
+      if (!sessionContent) {
+        return;
+      }
+
+      // 圧縮が必要かチェック
+      if (this.contextCompressor.shouldCompress(sessionContent)) {
+        this.logVerbose("コンテキスト圧縮を開始", {
+          sessionId: this.state.sessionId,
+          repository: this.state.repository.fullName,
+        });
+
+        // コンテキストを圧縮
+        const compressionResult = await this.contextCompressor.compressSession(
+          sessionContent,
+        );
+
+        if (compressionResult.wasCompressed) {
+          // 圧縮されたコンテンツでセッションファイルを更新
+          await this.updateSessionFile(compressionResult.compressedContent);
+
+          this.logVerbose("コンテキスト圧縮完了", {
+            sessionId: this.state.sessionId,
+            originalTokens: compressionResult.originalTokens,
+            compressedTokens: compressionResult.compressedTokens,
+            compressionRatio: compressionResult.compressionRatio,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("コンテキスト圧縮中にエラーが発生:", error);
+      // 圧縮失敗は運用を阻害しない（そのまま継続）
+    }
+  }
+
+  /**
+   * 現在のセッションファイルの内容を取得
+   */
+  private async getCurrentSessionContent(): Promise<string | null> {
+    if (!this.state.sessionId || !this.state.repository?.fullName) {
+      return null;
+    }
+
+    try {
+      const sessionManager = this.workspaceManager.getSessionManager();
+      const sessionFilePath = await sessionManager.getRawSessionFilePath(
+        this.state.repository.fullName,
+        this.state.sessionId,
+      );
+
+      if (!sessionFilePath) {
+        return null;
+      }
+
+      return await Deno.readTextFile(sessionFilePath);
+    } catch (error) {
+      console.error("セッションファイル読み取りエラー:", error);
+      return null;
+    }
+  }
+
+  /**
+   * セッションファイルを更新
+   */
+  private async updateSessionFile(compressedContent: string): Promise<void> {
+    if (!this.state.sessionId || !this.state.repository?.fullName) {
+      return;
+    }
+
+    try {
+      const sessionManager = this.workspaceManager.getSessionManager();
+      const sessionFilePath = await sessionManager.getRawSessionFilePath(
+        this.state.repository.fullName,
+        this.state.sessionId,
+      );
+
+      if (!sessionFilePath) {
+        return;
+      }
+
+      await Deno.writeTextFile(sessionFilePath, compressedContent);
+    } catch (error) {
+      console.error("セッションファイル更新エラー:", error);
+    }
   }
 }

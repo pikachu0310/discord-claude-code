@@ -30,7 +30,7 @@ export class SessionManager {
     return join(this.sessionsDir, repositoryFullName);
   }
 
-  private getRawSessionFilePath(
+  private getRawSessionFilePathWithTimestamp(
     repositoryFullName: string,
     timestamp: string,
     sessionId: string,
@@ -77,7 +77,7 @@ export class SessionManager {
       } else {
         // 新規ファイル作成
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        filePath = this.getRawSessionFilePath(
+        filePath = this.getRawSessionFilePathWithTimestamp(
           repositoryFullName,
           timestamp,
           sessionId,
@@ -209,6 +209,38 @@ export class SessionManager {
         sessionId,
         error: `セッションログの削除に失敗しました: ${error}`,
       });
+    }
+  }
+
+  /**
+   * 指定されたセッションの生JSONLファイルパスを取得
+   */
+  async getRawSessionFilePath(
+    repositoryFullName: string,
+    sessionId: string,
+  ): Promise<string | null> {
+    try {
+      const repositorySessionDir = this.getRepositorySessionDirPath(
+        repositoryFullName,
+      );
+
+      // 既存のファイルを探す
+      try {
+        for await (const entry of Deno.readDir(repositorySessionDir)) {
+          if (entry.isFile && entry.name.endsWith(`_${sessionId}.jsonl`)) {
+            return join(repositorySessionDir, entry.name);
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+          throw error;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error("セッションファイルパス取得エラー:", error);
+      return null;
     }
   }
 }

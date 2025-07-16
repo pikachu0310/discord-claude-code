@@ -345,7 +345,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     // /close コマンドの確認ボタン処理
     if (interaction.customId.startsWith("close_thread_confirm_")) {
       await interaction.deferReply();
-      
+
       const closeResult = await admin.closeThread(threadId);
       if (closeResult.isErr()) {
         await interaction.editReply(
@@ -362,7 +362,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
     if (interaction.customId.startsWith("close_thread_cancel_")) {
       await interaction.deferReply();
-      await interaction.editReply("❌ スレッドのクローズをキャンセルしました。");
+      await interaction.editReply(
+        "❌ スレッドのクローズをキャンセルしました。",
+      );
       return;
     }
 
@@ -873,7 +875,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
       await interaction.deferReply();
 
       const threadId = interaction.channel.id;
-      
+
       // 確認メッセージを送信
       await interaction.editReply(
         "🔄 本当にこのスレッドをクローズしますか？\n\n⚠️ スレッドをクローズすると、作業内容が保存され、スレッドがアーカイブされます。この操作は取り消すことができません。",
