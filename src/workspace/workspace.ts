@@ -270,9 +270,14 @@ export class WorkspaceManager {
     threadId: string,
     repositoryPath: string,
   ): Promise<string> {
+    // workerNameを取得
+    const workerState = await this.loadWorkerState(threadId);
+    const workerName = workerState?.workerName || threadId;
+
     const result = await this.threadManager.ensureWorktree(
       threadId,
       repositoryPath,
+      workerName,
     );
     if (result.isErr()) {
       throw new Error(

@@ -240,21 +240,24 @@ export async function isWorktreeCopyExists(
 
 /**
  * ブランチ名を生成する
- * フォーマット: worker/work-[yyyyMMdd]-[hhmmss]-[workerName]
+ * フォーマット: worker/[yyyy-MM-dd]/worker-[hhmmss]-[workerName]
  */
 export function generateBranchName(workerName: string): string {
   const now = new Date();
+  
+  // 日付部分: yyyy-MM-dd
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
+  const dateStr = `${year}-${month}-${day}`;
+
+  // 時刻部分: hhmmss
   const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
   const seconds = String(now.getSeconds()).padStart(2, "0");
-
-  const dateStr = `${year}${month}${day}`;
   const timeStr = `${hours}${minutes}${seconds}`;
 
-  return `worker/work-${dateStr}-${timeStr}-${workerName}`;
+  return `worker/${dateStr}/worker-${timeStr}-${workerName}`;
 }
 
 /**

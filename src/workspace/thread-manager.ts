@@ -159,6 +159,7 @@ export class ThreadManager {
   async ensureWorktree(
     threadId: string,
     repositoryPath: string,
+    workerName?: string,
   ): Promise<Result<string, WorkspaceError>> {
     const worktreePath = this.getWorktreePath(threadId);
     const exists = await isWorktreeCopyExists(worktreePath);
@@ -166,9 +167,12 @@ export class ThreadManager {
       return ok(worktreePath);
     }
 
+    // workerNameが指定されていない場合はthreadIdを使用
+    const effectiveWorkerName = workerName || threadId;
+
     const createResult = await createWorktreeCopy(
       repositoryPath,
-      threadId,
+      effectiveWorkerName,
       worktreePath,
     );
     if (createResult.isErr()) {

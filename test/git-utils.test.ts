@@ -75,12 +75,12 @@ Deno.test("generateBranchName関数のテスト", async (t) => {
     const workerName = "test-worker";
     const branchName = generateBranchName(workerName);
 
-    // フォーマットが正しいかチェック
-    const pattern = /^worker\/work-\d{8}-\d{6}-test-worker$/;
+    // フォーマットが正しいかチェック: worker/yyyy-MM-dd/worker-hhmmss-workerName
+    const pattern = /^worker\/\d{4}-\d{2}-\d{2}\/worker-\d{6}-test-worker$/;
     assertEquals(pattern.test(branchName), true);
 
     // プレフィックスが正しいかチェック
-    assertEquals(branchName.startsWith("worker/work-"), true);
+    assertEquals(branchName.startsWith("worker/"), true);
 
     // worker名が末尾に含まれているかチェック
     assertEquals(branchName.endsWith("-test-worker"), true);
@@ -92,20 +92,21 @@ Deno.test("generateBranchName関数のテスト", async (t) => {
     const branchName = generateBranchName(workerName);
     const afterCall = new Date();
 
-    // ブランチ名から日付と時刻を抽出
+    // ブランチ名から日付と時刻を抽出: worker/yyyy-MM-dd/worker-hhmmss-workerName
     const match = branchName.match(
-      /^worker\/work-(\d{8})-(\d{6})-test-worker$/,
+      /^worker\/(\d{4}-\d{2}-\d{2})\/worker-(\d{6})-test-worker$/,
     );
     assertEquals(match !== null, true);
 
     if (match) {
       const [, dateStr, timeStr] = match;
 
-      // 日付フォーマットの確認 (YYYYMMDD)
-      assertEquals(dateStr.length, 8);
-      const year = parseInt(dateStr.substring(0, 4));
-      const month = parseInt(dateStr.substring(4, 6));
-      const day = parseInt(dateStr.substring(6, 8));
+      // 日付フォーマットの確認 (YYYY-MM-DD)
+      assertEquals(dateStr.length, 10);
+      const [yearStr, monthStr, dayStr] = dateStr.split("-");
+      const year = parseInt(yearStr);
+      const month = parseInt(monthStr);
+      const day = parseInt(dayStr);
 
       // 時刻フォーマットの確認 (HHMMSS)
       assertEquals(timeStr.length, 6);
@@ -130,8 +131,10 @@ Deno.test("generateBranchName関数のテスト", async (t) => {
     for (const workerName of workerNames) {
       const branchName = generateBranchName(workerName);
 
-      // 各workerNameに対して正しいフォーマットかチェック
-      const pattern = new RegExp(`^worker\/work-\\d{8}-\\d{6}-${workerName}$`);
+      // 各workerNameに対して正しいフォーマットかチェック: worker/yyyy-MM-dd/worker-hhmmss-workerName
+      const pattern = new RegExp(
+        `^worker\/\\d{4}-\\d{2}-\\d{2}\/worker-\\d{6}-${workerName}$`,
+      );
       assertEquals(pattern.test(branchName), true);
     }
   });
