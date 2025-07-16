@@ -795,6 +795,81 @@ export class Admin implements IAdmin {
   }
 
   /**
+   * Planモードの設定
+   */
+  async setPlanMode(
+    threadId: string,
+    planMode: boolean,
+  ): Promise<Result<void, AdminError>> {
+    this.logVerbose("Planモード設定開始", { threadId, planMode });
+
+    const worker = this.workerManager.getWorker(threadId);
+    if (!worker) {
+      this.logVerbose("Worker見つからず", { threadId });
+      return err({
+        type: "WORKER_NOT_FOUND",
+        threadId,
+      });
+    }
+
+    try {
+      // Workerの状態を更新
+      worker.setPlanMode(planMode);
+      
+      // Workerの状態を保存
+      const saveResult = await worker.save();
+      if (saveResult.isErr()) {
+        this.logVerbose("Worker状態保存エラー", { 
+          threadId, 
+          error: saveResult.error 
+        });
+        return err({
+          type: "WORKSPACE_ERROR",
+          operation: "save_worker_state",
+          error: `Worker状態の保存に失敗: ${saveResult.error.type}`,
+        });
+      }
+
+      this.logVerbose("Planモード設定完了", { threadId, planMode });
+      return ok(undefined);
+    } catch (error) {
+      this.logVerbose("Planモード設定エラー", { 
+        threadId, 
+        planMode,
+        error: (error as Error).message 
+      });
+      return err({
+        type: "WORKSPACE_ERROR",
+        operation: "set_plan_mode",
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  /**
+   * スレッドをクローズする
+   */
+  async closeThread(
+    threadId: string,
+  ): Promise<Result<void, AdminError>> {
+    this.logVerbose("スレッドクローズ開始", { threadId });
+
+    // terminateThread メソッドを呼び出して完全にクリーンアップ
+    const terminateResult = await this.terminateThread(threadId);
+    
+    if (terminateResult.isErr()) {
+      this.logVerbose("スレッド終了処理エラー", { 
+        threadId, 
+        error: terminateResult.error 
+      });
+      return err(terminateResult.error);
+    }
+
+    this.logVerbose("スレッドクローズ完了", { threadId });
+    return ok(undefined);
+  }
+
+  /**
    * verboseログを出力する
    */
   private logVerbose(

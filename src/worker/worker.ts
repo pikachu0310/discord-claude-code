@@ -227,10 +227,35 @@ export class Worker implements IWorker {
       this.state.sessionId,
     );
 
+    // Planモードの場合は追加システムプロンプトを付加
+    if (this.isPlanMode()) {
+      const planModePrompt = `
+You are in plan mode. When responding to user requests, you should:
+1. Think about the implementation steps first
+2. Present a clear, structured plan to the user
+3. Use the exit_plan_mode tool when you've finished planning and are ready to start implementation
+4. Only use the exit_plan_mode tool for tasks that require code implementation
+
+For research, analysis, or informational tasks, do not use the exit_plan_mode tool.
+`;
+      
+      const modifiedArgs = [...args];
+      const systemPromptIndex = modifiedArgs.findIndex(arg => arg === '--append-system-prompt');
+      if (systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1) {
+        modifiedArgs[systemPromptIndex + 1] = modifiedArgs[systemPromptIndex + 1] + planModePrompt;
+      } else {
+        modifiedArgs.push('--append-system-prompt', planModePrompt);
+      }
+      
+      this.logVerbose("Planモード用システムプロンプト追加");
+      args.splice(0, args.length, ...modifiedArgs);
+    }
+
     this.logVerbose("Claudeコマンド実行", {
       args: args,
       cwd: this.state.worktreePath,
       useDevcontainer: this.state.devcontainerConfig.useDevcontainer,
+      isPlanMode: this.isPlanMode(),
     });
 
     this.logVerbose("ストリーミング実行開始");
@@ -975,6 +1000,21 @@ export class Worker implements IWorker {
     }
 
     return "アクティビティ実行中";
+  }
+
+  /**
+   * Planモードの状態を取得
+   */
+  isPlanMode(): boolean {
+    return this.state.isPlanMode || false;
+  }
+
+  /**
+   * Planモードの状態を設定
+   */
+  setPlanMode(planMode: boolean): void {
+    this.state.isPlanMode = planMode;
+    this.logVerbose("Planモード設定", { planMode });
   }
 
   /**

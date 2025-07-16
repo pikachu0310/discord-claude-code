@@ -57,4 +57,6 @@ export interface IWorker {
   stopExecution(
     onProgress?: (content: string) => Promise<void>,
   ): Promise<boolean>;
+  isPlanMode(): boolean;
+  setPlanMode(planMode: boolean): void;
 }

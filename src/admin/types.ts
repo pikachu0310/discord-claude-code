@@ -74,4 +74,11 @@ export interface IAdmin {
   stopExecution(
     threadId: string,
   ): Promise<import("neverthrow").Result<void, AdminError>>;
+  setPlanMode(
+    threadId: string,
+    planMode: boolean,
+  ): Promise<import("neverthrow").Result<void, AdminError>>;
+  closeThread(
+    threadId: string,
+  ): Promise<import("neverthrow").Result<void, AdminError>>;
 }

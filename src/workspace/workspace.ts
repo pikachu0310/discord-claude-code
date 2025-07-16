@@ -91,6 +91,7 @@ export interface WorkerState {
   queuedMessages?: QueuedMessage[];
   createdAt: string;
   lastActiveAt: string;
+  isPlanMode?: boolean;
 }
 
 export class WorkspaceManager {

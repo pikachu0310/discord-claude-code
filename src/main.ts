@@ -195,6 +195,16 @@ const commands = [
     .setDescription("実行中のClaude Codeを中断します")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName("plan")
+    .setDescription("Claude Codeをプランモードに設定します")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("close")
+    .setDescription("現在のスレッドをクローズします")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
+    .toJSON(),
 ];
 
 // Bot起動時の処理
@@ -329,6 +339,30 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const threadId = interaction.channel?.id;
     if (!threadId) {
       await interaction.reply("スレッドIDが取得できませんでした。");
+      return;
+    }
+
+    // /close コマンドの確認ボタン処理
+    if (interaction.customId.startsWith("close_thread_confirm_")) {
+      await interaction.deferReply();
+      
+      const closeResult = await admin.closeThread(threadId);
+      if (closeResult.isErr()) {
+        await interaction.editReply(
+          `❌ スレッドのクローズに失敗しました: ${closeResult.error.type}`,
+        );
+        return;
+      }
+
+      await interaction.editReply(
+        "✅ スレッドがクローズされました。作業内容が保存され、スレッドがアーカイブされます。",
+      );
+      return;
+    }
+
+    if (interaction.customId.startsWith("close_thread_cancel_")) {
+      await interaction.deferReply();
+      await interaction.editReply("❌ スレッドのクローズをキャンセルしました。");
       return;
     }
 
@@ -784,6 +818,92 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
       );
     } catch (error) {
       console.error("/stopコマンドエラー:", error);
+      try {
+        await interaction.editReply("エラーが発生しました。");
+      } catch {
+        await interaction.reply("エラーが発生しました。");
+      }
+    }
+  } else if (commandName === "plan") {
+    try {
+      // スレッド内でのみ使用可能
+      if (!interaction.channel || !interaction.channel.isThread()) {
+        await interaction.reply("このコマンドはスレッド内でのみ使用できます。");
+        return;
+      }
+
+      await interaction.deferReply();
+
+      const threadId = interaction.channel.id;
+      const planResult = await admin.setPlanMode(threadId, true);
+
+      if (planResult.isErr()) {
+        const error = planResult.error;
+        if (error.type === "WORKER_NOT_FOUND") {
+          await interaction.editReply(
+            "❌ プランモードの設定に失敗しました。このスレッドはアクティブではありません。",
+          );
+        } else {
+          await interaction.editReply(
+            `❌ プランモードの設定中にエラーが発生しました: ${error.type}`,
+          );
+        }
+        return;
+      }
+
+      await interaction.editReply(
+        "✅ プランモードを有効にしました。\n\n💡 今後の指示に対して、実装前に詳細な計画を立てて提案します。",
+      );
+    } catch (error) {
+      console.error("/planコマンドエラー:", error);
+      try {
+        await interaction.editReply("エラーが発生しました。");
+      } catch {
+        await interaction.reply("エラーが発生しました。");
+      }
+    }
+  } else if (commandName === "close") {
+    try {
+      // スレッド内でのみ使用可能
+      if (!interaction.channel || !interaction.channel.isThread()) {
+        await interaction.reply("このコマンドはスレッド内でのみ使用できます。");
+        return;
+      }
+
+      await interaction.deferReply();
+
+      const threadId = interaction.channel.id;
+      
+      // 確認メッセージを送信
+      await interaction.editReply(
+        "🔄 本当にこのスレッドをクローズしますか？\n\n⚠️ スレッドをクローズすると、作業内容が保存され、スレッドがアーカイブされます。この操作は取り消すことができません。",
+      );
+
+      // 確認ボタンを含むフォローアップメッセージを送信
+      await interaction.followUp({
+        content: "確認してください:",
+        components: [
+          {
+            type: 1,
+            components: [
+              {
+                type: 2,
+                style: 4, // 危険なアクション用のスタイル
+                label: "スレッドをクローズする",
+                custom_id: `close_thread_confirm_${threadId}`,
+              },
+              {
+                type: 2,
+                style: 2, // セカンダリスタイル
+                label: "キャンセル",
+                custom_id: `close_thread_cancel_${threadId}`,
+              },
+            ],
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("/closeコマンドエラー:", error);
       try {
         await interaction.editReply("エラーが発生しました。");
       } catch {
