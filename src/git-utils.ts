@@ -151,23 +151,83 @@ export interface RepoMetadata {
 }
 
 /**
+ * リポジトリへのアクセス可能性を事前に確認する
+ */
+async function validateRepositoryAccess(
+  fullName: string,
+): Promise<Result<boolean, GitUtilsError>> {
+  const viewResult = await exec(`gh repo view ${fullName} --json name`);
+
+  if (viewResult.isErr()) {
+    const error = viewResult.error;
+    if (error.type === "COMMAND_FAILED") {
+      if (error.error?.includes("GraphQL: Could not resolve to a Repository")) {
+        return err({
+          type: "REPOSITORY_NOT_FOUND",
+          path: fullName,
+        });
+      }
+      return err({
+        type: "GH_CLI_ERROR",
+        command: "gh repo view",
+        error: error.error || error.message,
+      });
+    }
+    return err({
+      type: "COMMAND_EXECUTION_FAILED",
+      command: "gh repo view",
+      error: error.message,
+    });
+  }
+
+  return ok(true);
+}
+
+/**
  * ghコマンドを使用してリポジトリをクローンする
  */
 async function cloneRepository(
   fullName: string,
   fullPath: string,
 ): Promise<Result<void, GitUtilsError>> {
+  // リポジトリアクセスの事前確認
+  const validateResult = await validateRepositoryAccess(fullName);
+  if (validateResult.isErr()) {
+    if (validateResult.error.type === "REPOSITORY_NOT_FOUND") {
+      return err({
+        type: "GH_CLI_ERROR",
+        command: "gh repo clone",
+        error:
+          `リポジトリ「${fullName}」が見つかりません。\n- リポジトリ名のスペルを確認してください\n- プライベートリポジトリの場合は、GitHub CLIで適切な権限を持つトークンで認証してください`,
+      });
+    }
+    return err(validateResult.error);
+  }
+
   const execResult = await exec(`gh repo clone ${fullName} ${fullPath}`);
 
   if (execResult.isErr()) {
     const error = execResult.error;
     if (error.type === "COMMAND_FAILED") {
+      let errorMessage = "リポジトリのcloneに失敗しました: ";
+
+      // GraphQLエラーの場合は、より具体的な説明を追加
+      if (
+        error.error &&
+        error.error.includes("GraphQL: Could not resolve to a Repository")
+      ) {
+        errorMessage += "リポジトリが存在しないか、アクセス権限がありません。";
+        errorMessage += "\n- リポジトリ名が正しいか確認してください";
+        errorMessage +=
+          "\n- プライベートリポジトリの場合は、GitHub CLIで適切な権限を持つトークンで認証してください";
+      } else {
+        errorMessage += error.error || error.message;
+      }
+
       return err({
         type: "GH_CLI_ERROR",
         command: "gh repo clone",
-        error: `リポジトリのcloneに失敗しました: ${
-          error.error || error.message
-        }`,
+        error: errorMessage,
       });
     }
     return err({
@@ -244,7 +304,7 @@ export async function isWorktreeCopyExists(
  */
 export function generateBranchName(workerName: string): string {
   const now = new Date();
-  
+
   // 日付部分: yyyy-MM-dd
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
