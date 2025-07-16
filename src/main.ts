@@ -403,10 +403,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
             }
           }
 
-          // ユーザーにメンション付きで通知
+          // ユーザーに通知
           if (interaction.channel && "send" in interaction.channel) {
             await interaction.channel.send(
-              `<@${interaction.user.id}> devcontainerの準備が完了しました！`,
+              "devcontainerの準備が完了しました！",
             );
           }
         } else {
@@ -420,10 +420,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
             [],
           );
 
-          // ユーザーにメンション付きで通知
+          // ユーザーに通知
           if (interaction.channel && "send" in interaction.channel) {
             await interaction.channel.send(
-              `<@${interaction.user.id}> devcontainerの起動に失敗しました。通常環境でClaude実行を継続します。`,
+              "devcontainerの起動に失敗しました。通常環境でClaude実行を継続します。",
             );
           }
         }
@@ -470,10 +470,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
           // 成功メッセージとログの表示
           await progressHandler.onSuccess([]);
 
-          // ユーザーにメンション付きで通知
+          // ユーザーに通知
           if (interaction.channel && "send" in interaction.channel) {
             await interaction.channel.send(
-              `<@${interaction.user.id}> fallback devcontainerの起動が完了しました！Claude実行環境が準備完了です。`,
+              "fallback devcontainerの起動が完了しました！Claude実行環境が準備完了です。",
             );
           }
         } else {
@@ -483,10 +483,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
             [],
           );
 
-          // ユーザーにメンション付きで通知
+          // ユーザーに通知
           if (interaction.channel && "send" in interaction.channel) {
             await interaction.channel.send(
-              `<@${interaction.user.id}> fallback devcontainerの起動に失敗しました。通常環境でClaude実行を継続します。`,
+              "fallback devcontainerの起動に失敗しました。通常環境でClaude実行を継続します。",
             );
           }
         }
@@ -939,17 +939,17 @@ client.on(Events.MessageCreate, async (message) => {
 
       if (setting === "on") {
         worker.setUseDevcontainer(true);
-        await message.channel.send(
-          `<@${message.author.id}> devcontainer環境での実行を設定しました。\n\n準備完了です！何かご質問をどうぞ。`,
+        await message.reply(
+          "devcontainer環境での実行を設定しました。\n\n準備完了です！何かご質問をどうぞ。",
         );
       } else if (setting === "off") {
         worker.setUseDevcontainer(false);
-        await message.channel.send(
-          `<@${message.author.id}> ホスト環境での実行を設定しました。\n\n準備完了です！何かご質問をどうぞ。`,
+        await message.reply(
+          "ホスト環境での実行を設定しました。\n\n準備完了です！何かご質問をどうぞ。",
         );
       } else {
-        await message.channel.send(
-          `<@${message.author.id}> 不正な設定値です。'/config devcontainer on' または '/config devcontainer off' を使用してください。`,
+        await message.reply(
+          "不正な設定値です。'/config devcontainer on' または '/config devcontainer off' を使用してください。",
         );
       }
       return;
@@ -1018,12 +1018,12 @@ client.on(Events.MessageCreate, async (message) => {
 
     // 最終的な返信を送信
     if (typeof reply === "string") {
-      // 通常のテキストレスポンス（メンション付きで通知あり）
-      await message.channel.send(`<@${message.author.id}> ${reply}`);
+      // 通常のテキストレスポンス（リプライ機能使用）
+      await message.reply(reply);
     } else {
       // DiscordMessage形式（ボタン付きメッセージなど）
-      await message.channel.send({
-        content: `<@${message.author.id}> ${reply.content}`,
+      await message.reply({
+        content: reply.content,
         components: reply.components,
       });
     }
