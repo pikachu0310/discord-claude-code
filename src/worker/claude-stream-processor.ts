@@ -31,7 +31,15 @@ export type ClaudeStreamMessage =
   // アシスタントメッセージ
   | {
     type: "assistant";
-    message: Anthropic.Message; // Anthropic SDKから
+    message: Anthropic.Message & {
+      usage?: {
+        input_tokens: number;
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+        output_tokens: number;
+        service_tier?: string;
+      };
+    }; // Anthropic SDKから
     session_id: string;
   }
   // ユーザーメッセージ

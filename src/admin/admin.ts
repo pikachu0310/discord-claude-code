@@ -35,13 +35,14 @@ export class Admin implements IAdmin {
     this.verbose = verbose;
 
     // 各マネージャーを初期化
+    this.rateLimitManager = new RateLimitManager(workspaceManager, verbose);
     this.workerManager = new WorkerManager(
       workspaceManager,
       verbose,
       appendSystemPrompt,
       translatorUrl,
+      this.rateLimitManager,
     );
-    this.rateLimitManager = new RateLimitManager(workspaceManager, verbose);
     this.devcontainerManager = new DevcontainerManager(
       workspaceManager,
       verbose,
@@ -525,6 +526,13 @@ export class Admin implements IAdmin {
   }
 
   /**
+   * Discordステータスをトークン使用量情報付きで更新する
+   */
+  async updateDiscordStatusWithTokenUsage(): Promise<void> {
+    await this.rateLimitManager.updateDiscordStatusWithTokenUsage();
+  }
+
+  /**
    * スレッドクローズコールバックを設定する
    */
   setThreadCloseCallback(
@@ -815,13 +823,13 @@ export class Admin implements IAdmin {
     try {
       // Workerの状態を更新
       worker.setPlanMode(planMode);
-      
+
       // Workerの状態を保存
       const saveResult = await worker.save();
       if (saveResult.isErr()) {
-        this.logVerbose("Worker状態保存エラー", { 
-          threadId, 
-          error: saveResult.error 
+        this.logVerbose("Worker状態保存エラー", {
+          threadId,
+          error: saveResult.error,
         });
         return err({
           type: "WORKSPACE_ERROR",
@@ -833,10 +841,10 @@ export class Admin implements IAdmin {
       this.logVerbose("Planモード設定完了", { threadId, planMode });
       return ok(undefined);
     } catch (error) {
-      this.logVerbose("Planモード設定エラー", { 
-        threadId, 
+      this.logVerbose("Planモード設定エラー", {
+        threadId,
         planMode,
-        error: (error as Error).message 
+        error: (error as Error).message,
       });
       return err({
         type: "WORKSPACE_ERROR",
@@ -856,11 +864,11 @@ export class Admin implements IAdmin {
 
     // terminateThread メソッドを呼び出して完全にクリーンアップ
     const terminateResult = await this.terminateThread(threadId);
-    
+
     if (terminateResult.isErr()) {
-      this.logVerbose("スレッド終了処理エラー", { 
-        threadId, 
-        error: terminateResult.error 
+      this.logVerbose("スレッド終了処理エラー", {
+        threadId,
+        error: terminateResult.error,
       });
       return err(terminateResult.error);
     }

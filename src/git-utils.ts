@@ -244,7 +244,7 @@ export async function isWorktreeCopyExists(
  */
 export function generateBranchName(workerName: string): string {
   const now = new Date();
-  
+
   // 日付部分: yyyy-MM-dd
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");

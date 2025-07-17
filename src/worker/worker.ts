@@ -19,6 +19,7 @@ import {
 import type { IWorker, WorkerError } from "./types.ts";
 import { err, ok, Result } from "neverthrow";
 import { PROCESS } from "../constants.ts";
+import type { RateLimitManager } from "../admin/rate-limit-manager.ts";
 
 export class Worker implements IWorker {
   private state: WorkerState;
@@ -33,6 +34,7 @@ export class Worker implements IWorker {
   private isExecuting = false;
   private executionStartTime: number | null = null;
   private lastActivityDescription: string | null = null;
+  private rateLimitManager?: RateLimitManager;
 
   constructor(
     state: WorkerState,
@@ -41,6 +43,7 @@ export class Worker implements IWorker {
     verbose?: boolean,
     appendSystemPrompt?: string,
     translatorUrl?: string,
+    rateLimitManager?: RateLimitManager,
   ) {
     this.state = state;
     this.workspaceManager = workspaceManager;
@@ -53,6 +56,7 @@ export class Worker implements IWorker {
     this.formatter = new MessageFormatter(state.worktreePath || undefined);
     this.claudeExecutor = claudeExecutor ||
       new DefaultClaudeCommandExecutor(this.configuration.isVerbose());
+    this.rateLimitManager = rateLimitManager;
 
     // 翻訳URLが設定されている場合は翻訳機能を初期化
     this.translator = PLaMoTranslator.fromEnv(translatorUrl);
@@ -238,15 +242,20 @@ You are in plan mode. When responding to user requests, you should:
 
 For research, analysis, or informational tasks, do not use the exit_plan_mode tool.
 `;
-      
+
       const modifiedArgs = [...args];
-      const systemPromptIndex = modifiedArgs.findIndex(arg => arg === '--append-system-prompt');
-      if (systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1) {
-        modifiedArgs[systemPromptIndex + 1] = modifiedArgs[systemPromptIndex + 1] + planModePrompt;
+      const systemPromptIndex = modifiedArgs.findIndex((arg) =>
+        arg === "--append-system-prompt"
+      );
+      if (
+        systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1
+      ) {
+        modifiedArgs[systemPromptIndex + 1] =
+          modifiedArgs[systemPromptIndex + 1] + planModePrompt;
       } else {
-        modifiedArgs.push('--append-system-prompt', planModePrompt);
+        modifiedArgs.push("--append-system-prompt", planModePrompt);
       }
-      
+
       this.logVerbose("Planモード用システムプロンプト追加");
       args.splice(0, args.length, ...modifiedArgs);
     }
@@ -421,6 +430,21 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
           break;
         case "assistant":
           this.handleAssistantMessage(parsed, state, updateState);
+          // assistantメッセージからトークン使用量を追跡
+          if (parsed.message?.usage && this.rateLimitManager) {
+            const usage = parsed.message.usage;
+            const inputTokens = usage.input_tokens +
+              (usage.cache_creation_input_tokens || 0) +
+              (usage.cache_read_input_tokens || 0);
+            const outputTokens = usage.output_tokens;
+
+            this.rateLimitManager.trackTokenUsage(inputTokens, outputTokens);
+            this.logVerbose("トークン使用量を追跡", {
+              inputTokens,
+              outputTokens,
+              totalTokens: inputTokens + outputTokens,
+            });
+          }
           break;
       }
 
@@ -1330,6 +1354,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
     verbose?: boolean,
     appendSystemPrompt?: string,
     translatorUrl?: string,
+    rateLimitManager?: RateLimitManager,
   ): Promise<Worker> {
     const worker = new Worker(
       workerState,
@@ -1338,6 +1363,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       verbose,
       appendSystemPrompt,
       translatorUrl,
+      rateLimitManager,
     );
 
     // devcontainerが使用されている場合はExecutorを切り替え

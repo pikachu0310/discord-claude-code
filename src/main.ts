@@ -1,5 +1,4 @@
 import {
-  ActivityType,
   AutocompleteInteraction,
   ButtonInteraction,
   ChannelType,
@@ -10,7 +9,6 @@ import {
   Message,
   Partials,
   PermissionFlagsBits,
-  PresenceUpdateStatus,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -211,17 +209,20 @@ const commands = [
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`ログイン完了: ${readyClient.user.tag}`);
 
-  // 初期プレゼンス設定
-  await readyClient.user.setPresence({
-    activities: [{
-      name: "Claude Code Bot で開発支援中",
-      type: ActivityType.Playing,
-    }],
-    status: PresenceUpdateStatus.Online,
-  });
-
   // DiscordクライアントをAdminに設定
   admin.setDiscordClient(readyClient);
+
+  // 初期プレゼンス設定をトークン使用量付きで行う
+  await admin.updateDiscordStatusWithTokenUsage();
+
+  // 定期的なステータス更新を設定（10分ごと）
+  setInterval(async () => {
+    try {
+      await admin.updateDiscordStatusWithTokenUsage();
+    } catch (error) {
+      console.error("定期ステータス更新エラー:", error);
+    }
+  }, 10 * 60 * 1000); // 10分ごと
 
   // 自動再開コールバックを設定
   admin.setAutoResumeCallback(async (threadId: string, message: string) => {
@@ -345,7 +346,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     // /close コマンドの確認ボタン処理
     if (interaction.customId.startsWith("close_thread_confirm_")) {
       await interaction.deferReply();
-      
+
       const closeResult = await admin.closeThread(threadId);
       if (closeResult.isErr()) {
         await interaction.editReply(
@@ -362,7 +363,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
     if (interaction.customId.startsWith("close_thread_cancel_")) {
       await interaction.deferReply();
-      await interaction.editReply("❌ スレッドのクローズをキャンセルしました。");
+      await interaction.editReply(
+        "❌ スレッドのクローズをキャンセルしました。",
+      );
       return;
     }
 
@@ -873,7 +876,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
       await interaction.deferReply();
 
       const threadId = interaction.channel.id;
-      
+
       // 確認メッセージを送信
       await interaction.editReply(
         "🔄 本当にこのスレッドをクローズしますか？\n\n⚠️ スレッドをクローズすると、作業内容が保存され、スレッドがアーカイブされます。この操作は取り消すことができません。",
