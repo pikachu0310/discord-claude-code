@@ -35,13 +35,14 @@ export class Admin implements IAdmin {
     this.verbose = verbose;
 
     // 各マネージャーを初期化
+    this.rateLimitManager = new RateLimitManager(workspaceManager, verbose);
     this.workerManager = new WorkerManager(
       workspaceManager,
       verbose,
       appendSystemPrompt,
       translatorUrl,
+      this.rateLimitManager,
     );
-    this.rateLimitManager = new RateLimitManager(workspaceManager, verbose);
     this.devcontainerManager = new DevcontainerManager(
       workspaceManager,
       verbose,
@@ -522,6 +523,13 @@ export class Admin implements IAdmin {
    */
   setDiscordClient(client: Client): void {
     this.rateLimitManager.setDiscordClient(client);
+  }
+
+  /**
+   * Discordステータスをトークン使用量情報付きで更新する
+   */
+  async updateDiscordStatusWithTokenUsage(): Promise<void> {
+    await this.rateLimitManager.updateDiscordStatusWithTokenUsage();
   }
 
   /**

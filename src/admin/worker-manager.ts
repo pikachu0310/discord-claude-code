@@ -6,6 +6,7 @@ import { WorkspaceManager } from "../workspace/workspace.ts";
 import { parseRepository } from "../git-utils.ts";
 import { err, ok, Result } from "neverthrow";
 import { exec } from "../utils/exec.ts";
+import type { RateLimitManager } from "./rate-limit-manager.ts";
 
 // エラー型定義
 export type WorkerManagerError =
@@ -24,17 +25,20 @@ export class WorkerManager {
   private verbose: boolean;
   private appendSystemPrompt?: string;
   private translatorUrl?: string;
+  private rateLimitManager?: RateLimitManager;
 
   constructor(
     workspaceManager: WorkspaceManager,
     verbose = false,
     appendSystemPrompt?: string,
     translatorUrl?: string,
+    rateLimitManager?: RateLimitManager,
   ) {
     this.workspaceManager = workspaceManager;
     this.verbose = verbose;
     this.appendSystemPrompt = appendSystemPrompt;
     this.translatorUrl = translatorUrl;
+    this.rateLimitManager = rateLimitManager;
   }
 
   /**
@@ -90,6 +94,7 @@ export class WorkerManager {
       this.verbose,
       this.appendSystemPrompt,
       this.translatorUrl,
+      this.rateLimitManager,
     );
     this.workers.set(threadId, worker);
 
@@ -242,6 +247,7 @@ export class WorkerManager {
         this.verbose,
         this.appendSystemPrompt,
         this.translatorUrl,
+        this.rateLimitManager,
       );
 
       // Workerを管理Mapに追加
@@ -293,6 +299,7 @@ export class WorkerManager {
         this.verbose,
         this.appendSystemPrompt,
         this.translatorUrl,
+        this.rateLimitManager,
       );
 
       // リポジトリ情報を復旧

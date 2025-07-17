@@ -7,6 +7,7 @@ import { WorkspaceManager } from "../workspace/workspace.ts";
 import { RATE_LIMIT } from "../constants.ts";
 import type { Client } from "discord.js";
 import { ActivityType, PresenceUpdateStatus } from "discord.js";
+import { TokenUsageTracker } from "../token-usage-tracker.ts";
 
 export class RateLimitManager {
   private autoResumeTimers: Map<string, ReturnType<typeof setTimeout>> =
@@ -18,6 +19,7 @@ export class RateLimitManager {
     threadId: string,
     message: string,
   ) => Promise<void>;
+  private tokenUsageTracker: TokenUsageTracker;
 
   constructor(
     workspaceManager: WorkspaceManager,
@@ -25,6 +27,7 @@ export class RateLimitManager {
   ) {
     this.workspaceManager = workspaceManager;
     this.verbose = verbose;
+    this.tokenUsageTracker = new TokenUsageTracker();
   }
 
   /**
@@ -498,17 +501,64 @@ export class RateLimitManager {
     }
 
     try {
+      const tokenStatus = this.tokenUsageTracker.getStatusString();
       await this.discordClient.user?.setPresence({
         activities: [{
-          name: "Claude Code Bot で開発支援中",
+          name: `Claude Code Bot で開発支援中 - ${tokenStatus}`,
           type: ActivityType.Playing,
         }],
         status: PresenceUpdateStatus.Online,
       });
 
-      this.logVerbose("Discord ステータスを通常に復旧");
+      this.logVerbose("Discord ステータスを通常に復旧（トークン使用量付き）");
     } catch (error) {
       console.error("Discord ステータス復旧に失敗しました:", error);
+    }
+  }
+
+  /**
+   * トークン使用量を追跡する
+   */
+  trackTokenUsage(inputTokens: number, outputTokens: number): void {
+    this.tokenUsageTracker.addTokenUsage(inputTokens, outputTokens);
+    this.logVerbose("トークン使用量を追跡", {
+      inputTokens,
+      outputTokens,
+      currentUsage: this.tokenUsageTracker.getCurrentUsage(),
+      usagePercentage: this.tokenUsageTracker.getUsagePercentage(),
+    });
+  }
+
+  /**
+   * 現在のトークン使用量情報を取得
+   */
+  getTokenUsageInfo() {
+    return this.tokenUsageTracker.getUsageInfo();
+  }
+
+  /**
+   * Discordステータスを定期的に更新する
+   */
+  async updateDiscordStatusWithTokenUsage(): Promise<void> {
+    if (!this.discordClient) {
+      return;
+    }
+
+    try {
+      const tokenStatus = this.tokenUsageTracker.getStatusString();
+      await this.discordClient.user?.setPresence({
+        activities: [{
+          name: `Claude Code Bot で開発支援中 - ${tokenStatus}`,
+          type: ActivityType.Playing,
+        }],
+        status: PresenceUpdateStatus.Online,
+      });
+
+      this.logVerbose("Discord ステータスを更新（トークン使用量付き）", {
+        tokenStatus,
+      });
+    } catch (error) {
+      console.error("Discord ステータス更新に失敗しました:", error);
     }
   }
 
