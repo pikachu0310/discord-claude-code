@@ -55,12 +55,26 @@ Deno.test("ClaudeStreamProcessor でのレートリミット検出", () => {
     processor.isClaudeCodeRateLimit("Claude AI usage limit reached|1749168000"),
     true,
   );
+  assertEquals(
+    processor.isClaudeCodeRateLimit("Claude AI usage limit reached 1749168000"),
+    true,
+  );
+  assertEquals(
+    processor.isClaudeCodeRateLimit("Claude AI usage limit reached"),
+    true,
+  );
   assertEquals(processor.isClaudeCodeRateLimit("Normal response"), false);
 
   // タイムスタンプ抽出テスト
   assertEquals(
     processor.extractRateLimitTimestamp(
       "Claude AI usage limit reached|1749168000",
+    ),
+    1749168000,
+  );
+  assertEquals(
+    processor.extractRateLimitTimestamp(
+      "Claude AI usage limit reached 1749168000",
     ),
     1749168000,
   );

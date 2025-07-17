@@ -238,15 +238,20 @@ You are in plan mode. When responding to user requests, you should:
 
 For research, analysis, or informational tasks, do not use the exit_plan_mode tool.
 `;
-      
+
       const modifiedArgs = [...args];
-      const systemPromptIndex = modifiedArgs.findIndex(arg => arg === '--append-system-prompt');
-      if (systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1) {
-        modifiedArgs[systemPromptIndex + 1] = modifiedArgs[systemPromptIndex + 1] + planModePrompt;
+      const systemPromptIndex = modifiedArgs.findIndex((arg) =>
+        arg === "--append-system-prompt"
+      );
+      if (
+        systemPromptIndex !== -1 && systemPromptIndex < modifiedArgs.length - 1
+      ) {
+        modifiedArgs[systemPromptIndex + 1] =
+          modifiedArgs[systemPromptIndex + 1] + planModePrompt;
       } else {
-        modifiedArgs.push('--append-system-prompt', planModePrompt);
+        modifiedArgs.push("--append-system-prompt", planModePrompt);
       }
-      
+
       this.logVerbose("Planモード用システムプロンプト追加");
       args.splice(0, args.length, ...modifiedArgs);
     }
@@ -474,12 +479,12 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       // JSONとしてパースできなかった場合もレートリミットをチェック
       if (line.trim()) {
         // Claude Codeレートリミットの検出（生テキスト内）
-        if (line.includes("Claude AI usage limit reached|")) {
+        if (line.includes("Claude AI usage limit reached")) {
           this.logVerbose("Claude Codeレートリミット検出（生テキスト内）", {
             line: line.substring(0, 200),
           });
           const match = line.match(
-            /Claude AI usage limit reached\|(\d+)/,
+            /Claude AI usage limit reached[\|\s](\d+)/,
           );
           if (match) {
             throw new ClaudeCodeRateLimitError(
@@ -510,7 +515,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       }
       if (textResult) {
         // Claude Codeレートリミットの検出（assistantメッセージ内）
-        if (textResult.includes("Claude AI usage limit reached|")) {
+        if (textResult.includes("Claude AI usage limit reached")) {
           this.logVerbose(
             "Claude Codeレートリミット検出（assistantメッセージ内）",
             {
@@ -518,7 +523,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
             },
           );
           const match = textResult.match(
-            /Claude AI usage limit reached\|(\d+)/,
+            /Claude AI usage limit reached[\|\s](\d+)/,
           );
           if (match) {
             throw new ClaudeCodeRateLimitError(
@@ -546,12 +551,12 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       });
 
       // Claude Codeレートリミットの検出
-      if (parsed.result.includes("Claude AI usage limit reached|")) {
+      if (parsed.result.includes("Claude AI usage limit reached")) {
         this.logVerbose("Claude Codeレートリミット検出（resultメッセージ内）", {
           result: parsed.result.substring(0, 200),
         });
         const match = parsed.result.match(
-          /Claude AI usage limit reached\|(\d+)/,
+          /Claude AI usage limit reached[\|\s](\d+)/,
         );
         if (match) {
           throw new ClaudeCodeRateLimitError(

@@ -319,14 +319,16 @@ export class ClaudeStreamProcessor {
    * Claude Codeのレートリミットメッセージかを判定する
    */
   isClaudeCodeRateLimit(result: string): boolean {
-    return result.includes("Claude AI usage limit reached|");
+    // より包括的な検知を行う
+    return result.includes("Claude AI usage limit reached");
   }
 
   /**
    * レートリミットメッセージからタイムスタンプを抽出する
    */
   extractRateLimitTimestamp(result: string): number | null {
-    const match = result.match(/Claude AI usage limit reached\|(\d+)/);
+    // より柔軟な正規表現で検知（パイプまたはスペース区切り）
+    const match = result.match(/Claude AI usage limit reached[\|\s](\d+)/);
     if (match) {
       return parseInt(match[1], 10);
     }
