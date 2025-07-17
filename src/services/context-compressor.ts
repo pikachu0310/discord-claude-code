@@ -8,7 +8,9 @@ import { estimateTokenCountFromSession } from "../utils/token-counter.ts";
 export interface SessionMessage {
   type?: string;
   role?: string;
-  content?: string | Array<{ type: string; text?: string; name?: string; input?: unknown }>;
+  content?:
+    | string
+    | Array<{ type: string; text?: string; name?: string; input?: unknown }>;
   timestamp?: number;
 }
 

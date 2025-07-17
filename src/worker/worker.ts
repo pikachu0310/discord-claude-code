@@ -575,6 +575,22 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
         isError: parsed.is_error,
       });
 
+      // resultメッセージからトークン使用量を追跡
+      if (parsed.usage && this.rateLimitManager) {
+        const usage = parsed.usage;
+        const inputTokens = usage.input_tokens +
+          (usage.cache_creation_input_tokens || 0) +
+          (usage.cache_read_input_tokens || 0);
+        const outputTokens = usage.output_tokens;
+
+        this.rateLimitManager.trackTokenUsage(inputTokens, outputTokens);
+        this.logVerbose("トークン使用量を追跡（resultメッセージ）", {
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+        });
+      }
+
       // Claude Codeレートリミットの検出
       if (parsed.result.includes("Claude AI usage limit reached")) {
         this.logVerbose("Claude Codeレートリミット検出（resultメッセージ内）", {

@@ -504,7 +504,7 @@ export class RateLimitManager {
       const tokenStatus = this.tokenUsageTracker.getStatusString();
       await this.discordClient.user?.setPresence({
         activities: [{
-          name: `Claude Code Bot で開発支援中 - ${tokenStatus}`,
+          name: `${tokenStatus}`,
           type: ActivityType.Playing,
         }],
         status: PresenceUpdateStatus.Online,
@@ -548,7 +548,7 @@ export class RateLimitManager {
       const tokenStatus = this.tokenUsageTracker.getStatusString();
       await this.discordClient.user?.setPresence({
         activities: [{
-          name: `Claude Code Bot で開発支援中 - ${tokenStatus}`,
+          name: `${tokenStatus}`,
           type: ActivityType.Playing,
         }],
         status: PresenceUpdateStatus.Online,

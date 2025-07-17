@@ -59,6 +59,16 @@ export type ClaudeStreamMessage =
     result: string;
     session_id: string;
     total_cost_usd: number;
+    usage?: {
+      input_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+      output_tokens: number;
+      server_tool_use?: {
+        web_search_requests: number;
+      };
+      service_tier?: string;
+    };
   }
   // 最大ターン数に達した場合、最後のメッセージとして出力される
   | {
@@ -70,6 +80,16 @@ export type ClaudeStreamMessage =
     num_turns: number;
     session_id: string;
     total_cost_usd: number;
+    usage?: {
+      input_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+      output_tokens: number;
+      server_tool_use?: {
+        web_search_requests: number;
+      };
+      service_tier?: string;
+    };
   }
   // 会話の開始時に最初のメッセージとして出力される
   | {
