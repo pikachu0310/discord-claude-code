@@ -7,7 +7,7 @@ export interface TokenUsageInfo {
   maxTokens: number;
   usagePercentage: number;
   nextResetTime: Date;
-  nextResetTimeJST: string;
+  nextResetTimeUTC: string;
 }
 
 export class TokenUsageTracker {
@@ -21,22 +21,19 @@ export class TokenUsageTracker {
   }
 
   /**
-   * リセット時刻を初期化（毎日午前0時JST）
+   * リセット時刻を初期化（毎日午前0時UTC）
    */
   private initializeResetTime(): void {
     const now = new Date();
-    const jstOffset = 9 * 60 * 60 * 1000; // JST = UTC+9
-    const jstNow = new Date(now.getTime() + jstOffset);
-
-    // 今日の午前0時JST
-    const todayMidnightJST = new Date(
-      jstNow.getFullYear(),
-      jstNow.getMonth(),
-      jstNow.getDate(),
+    
+    // 今日の午前0時UTC
+    const todayMidnightUTC = new Date(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
     );
 
-    // UTC時刻に変換
-    this.lastResetTime = new Date(todayMidnightJST.getTime() - jstOffset);
+    this.lastResetTime = todayMidnightUTC;
   }
 
   /**
@@ -78,14 +75,7 @@ export class TokenUsageTracker {
     this.checkAndResetIfNeeded();
 
     const nextResetTime = this.getNextResetTime();
-    const nextResetTimeJST = nextResetTime.toLocaleString("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const nextResetTimeUTC = nextResetTime.toISOString().slice(0, 16).replace('T', ' ');
 
     return {
       currentUsage: this.currentUsage,
@@ -94,7 +84,7 @@ export class TokenUsageTracker {
         (this.currentUsage / TokenUsageTracker.TOKEN_BASE) * 100,
       ),
       nextResetTime,
-      nextResetTimeJST,
+      nextResetTimeUTC,
     };
   }
 
@@ -103,7 +93,7 @@ export class TokenUsageTracker {
    */
   getStatusString(): string {
     const info = this.getUsageInfo();
-    return `${info.currentUsage}/${info.maxTokens} (${info.usagePercentage}%) - 次回リセット: ${info.nextResetTimeJST}`;
+    return `${info.currentUsage}/${info.maxTokens} (${info.usagePercentage}%) ${info.nextResetTimeUTC}`;
   }
 
   /**
