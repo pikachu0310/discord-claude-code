@@ -448,3 +448,15 @@ Discord User → main.ts (MessageCreate) → admin.routeMessage() → worker.pro
 
 Claude
 Code実行の中断機能を提供するスラッシュコマンド。詳細は[README.md#実行の中断](README.md#実行の中断)を参照。
+
+## PR作成時の注意
+
+PR作成の指示を出すとき、`gh pr create`の作成先がフォーク元のリポジトリになってしまうため、`pikachu0310`のリポジトリにPRを出すよう明示的に指定すること。
+
+```bash
+# 正しい例
+gh pr create --head pikachu0310:branch-name --title "Title" --body "Body"
+
+# または--repo指定
+gh pr create --repo pikachu0310/repository-name --title "Title" --body "Body"
+```
