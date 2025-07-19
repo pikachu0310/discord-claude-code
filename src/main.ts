@@ -191,12 +191,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName("stop")
     .setDescription("実行中のClaude Codeを中断します")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
     .toJSON(),
   new SlashCommandBuilder()
     .setName("plan")
     .setDescription("Claude Codeをプランモードに設定します")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
     .toJSON(),
   new SlashCommandBuilder()
     .setName("close")
