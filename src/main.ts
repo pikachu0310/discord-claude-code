@@ -27,6 +27,7 @@ import {
   formatSystemCheckResults,
 } from "./system-check.ts";
 import { generateThreadName, summarizeWithGemini } from "./gemini.ts";
+import { usageCommand, usageDetailCommand } from "./commands/usage-command.ts";
 
 // システム要件チェック
 console.log("システム要件をチェックしています...");
@@ -201,6 +202,8 @@ const commands = [
     .setDescription("現在のスレッドをクローズします")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
     .toJSON(),
+  usageCommand.data.toJSON(),
+  usageDetailCommand.data.toJSON(),
 ];
 
 // Bot起動時の処理
@@ -911,6 +914,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
         await interaction.reply("エラーが発生しました。");
       }
     }
+  } else if (commandName === "usage") {
+    await usageCommand.execute(interaction);
+  } else if (commandName === "usage-detail") {
+    await usageDetailCommand.execute(interaction);
   }
 }
 

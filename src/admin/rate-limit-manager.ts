@@ -8,6 +8,7 @@ import { RATE_LIMIT } from "../constants.ts";
 import type { Client } from "discord.js";
 import { ActivityType, PresenceUpdateStatus } from "discord.js";
 import { TokenUsageTracker } from "../token-usage-tracker.ts";
+import { UsageAnalyzer } from "../usage-analyzer.ts";
 
 export class RateLimitManager {
   private autoResumeTimers: Map<string, ReturnType<typeof setTimeout>> =
@@ -20,6 +21,7 @@ export class RateLimitManager {
     message: string,
   ) => Promise<void>;
   private tokenUsageTracker: TokenUsageTracker;
+  private usageAnalyzer: UsageAnalyzer;
 
   constructor(
     workspaceManager: WorkspaceManager,
@@ -28,6 +30,7 @@ export class RateLimitManager {
     this.workspaceManager = workspaceManager;
     this.verbose = verbose;
     this.tokenUsageTracker = new TokenUsageTracker();
+    this.usageAnalyzer = new UsageAnalyzer();
   }
 
   /**
@@ -534,6 +537,34 @@ export class RateLimitManager {
    */
   getTokenUsageInfo() {
     return this.tokenUsageTracker.getUsageInfo();
+  }
+
+  /**
+   * Claude Code セッションログからの詳細使用統計を取得
+   */
+  async getDetailedUsageReport(days = 30): Promise<string> {
+    try {
+      return await this.usageAnalyzer.generateJsonReport(days);
+    } catch (error) {
+      this.logVerbose("詳細使用統計の取得に失敗", {
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 使用統計サマリーを取得
+   */
+  async getUsageSummary(days = 30): Promise<string> {
+    try {
+      return await this.usageAnalyzer.generateSummary(days);
+    } catch (error) {
+      this.logVerbose("使用統計サマリーの取得に失敗", {
+        error: (error as Error).message,
+      });
+      throw error;
+    }
   }
 
   /**
