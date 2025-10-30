@@ -251,10 +251,10 @@ export class Worker implements IWorker {
 
       if (lastResult.isErr() && lastResult.error.type === "CODEX_CLI_UNSUPPORTED_OPTION") {
         if (
-          lastResult.error.option === "--output-format" &&
+          lastResult.error.option === "--json" &&
           attempt < maxAttempts - 1
         ) {
-          this.logVerbose("Codex CLIが--output-formatをサポートしていないため再試行", {
+          this.logVerbose("Codex CLIが--jsonをサポートしていないため再試行", {
             stderr: lastResult.error.stderr,
           });
           this.configuration.disableOutputFormatFlag();
@@ -274,12 +274,12 @@ export class Worker implements IWorker {
         }
 
         if (
-          lastResult.error.option === "--dangerously-skip-permissions" &&
+          lastResult.error.option === "--dangerously-bypass-approvals-and-sandbox" &&
           this.configuration.shouldUseDangerouslySkipPermissionsFlag() &&
           attempt < maxAttempts - 1
         ) {
           this.logVerbose(
-            "Codex CLIが--dangerously-skip-permissionsをサポートしていないため再試行",
+            "Codex CLIが--dangerously-bypass-approvals-and-sandboxをサポートしていないため再試行",
             {
               stderr: lastResult.error.stderr,
             },
@@ -713,14 +713,14 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
   ): Result<never, WorkerError> {
     const stderrMessage = new TextDecoder().decode(stderr);
 
-    if (stderrMessage.includes("unexpected argument '--output-format'")) {
-      this.logVerbose("Codex CLIが--output-formatを認識しないエラーを検出", {
+    if (stderrMessage.includes("unexpected argument '--json'")) {
+      this.logVerbose("Codex CLIが--jsonを認識しないエラーを検出", {
         exitCode: code,
         stderr: stderrMessage,
       });
       return err({
         type: "CODEX_CLI_UNSUPPORTED_OPTION",
-        option: "--output-format",
+        option: "--json",
         stderr: stderrMessage,
       });
     }
@@ -737,9 +737,13 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       });
     }
 
-    if (stderrMessage.includes("unexpected argument '--dangerously-skip-permissions'")) {
+    if (
+      stderrMessage.includes(
+        "unexpected argument '--dangerously-bypass-approvals-and-sandbox'",
+      )
+    ) {
       this.logVerbose(
-        "Codex CLIが--dangerously-skip-permissionsを認識しないエラーを検出",
+        "Codex CLIが--dangerously-bypass-approvals-and-sandboxを認識しないエラーを検出",
         {
           exitCode: code,
           stderr: stderrMessage,
@@ -747,7 +751,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       );
       return err({
         type: "CODEX_CLI_UNSUPPORTED_OPTION",
-        option: "--dangerously-skip-permissions",
+        option: "--dangerously-bypass-approvals-and-sandbox",
         stderr: stderrMessage,
       });
     }

@@ -7,7 +7,7 @@ import { WorkerState, WorkspaceManager } from "./workspace/workspace.ts";
 import { parseRepository } from "./git-utils.ts";
 import { ok } from "neverthrow";
 
-class OutputFormatFallbackExecutor implements CodexCommandExecutor {
+class JsonFlagFallbackExecutor implements CodexCommandExecutor {
   attempts = 0;
   argsHistory: string[][] = [];
 
@@ -26,7 +26,7 @@ class OutputFormatFallbackExecutor implements CodexCommandExecutor {
 
     if (this.attempts === 1) {
       const stderrMessage =
-        "error: unexpected argument '--output-format' found\n";
+        "error: unexpected argument '--json' found\n";
       return ok({ code: 2, stderr: encoder.encode(stderrMessage) });
     }
 
@@ -139,7 +139,7 @@ class MultipleFlagFallbackExecutor implements CodexCommandExecutor {
 
     if (this.attempts === 1) {
       const stderrMessage =
-        "error: unexpected argument '--output-format' found\n";
+        "error: unexpected argument '--json' found\n";
       return ok({ code: 2, stderr: encoder.encode(stderrMessage) });
     }
 
@@ -150,7 +150,7 @@ class MultipleFlagFallbackExecutor implements CodexCommandExecutor {
 
     if (this.attempts === 3) {
       const stderrMessage =
-        "error: unexpected argument '--dangerously-skip-permissions' found\n";
+        "error: unexpected argument '--dangerously-bypass-approvals-and-sandbox' found\n";
       return ok({ code: 2, stderr: encoder.encode(stderrMessage) });
     }
 
@@ -207,7 +207,7 @@ class DangerouslySkipPermissionsFallbackExecutor implements CodexCommandExecutor
 
     if (this.attempts === 1) {
       const stderrMessage =
-        "error: unexpected argument '--dangerously-skip-permissions' found\n";
+        "error: unexpected argument '--dangerously-bypass-approvals-and-sandbox' found\n";
       return ok({ code: 2, stderr: encoder.encode(stderrMessage) });
     }
 
@@ -318,14 +318,14 @@ class TtyFallbackExecutor implements CodexCommandExecutor {
   }
 }
 
-describe("Worker --output-format フラグ自動再試行", () => {
-  it("Codex CLIが--output-formatを拒否した場合に自動でフラグを無効化する", async () => {
+describe("Worker --json フラグ自動再試行", () => {
+  it("Codex CLIが--jsonを拒否した場合に自動でフラグを無効化する", async () => {
     const tempDir = await Deno.makeTempDir();
     try {
       const workspaceManager = new WorkspaceManager(tempDir);
       await workspaceManager.initialize();
 
-      const executor = new OutputFormatFallbackExecutor();
+      const executor = new JsonFlagFallbackExecutor();
 
       resetOutputFormatDetectionForTests();
       const repoPath = await Deno.makeTempDir();
@@ -373,8 +373,8 @@ describe("Worker --output-format フラグ自動再試行", () => {
 
         const firstArgs = executor.argsHistory[0];
         const secondArgs = executor.argsHistory[1];
-        assertEquals(firstArgs.includes("--output-format"), true);
-        assertEquals(secondArgs.includes("--output-format"), false);
+        assertEquals(firstArgs.includes("--json"), true);
+        assertEquals(secondArgs.includes("--json"), false);
       } finally {
         await Deno.remove(repoPath, { recursive: true });
       }
@@ -452,9 +452,9 @@ describe("Worker --verbose フラグ自動再試行", () => {
   });
 });
 
-describe("Worker --dangerously-skip-permissions フラグ自動再試行", () => {
+describe("Worker --dangerously-bypass-approvals-and-sandbox フラグ自動再試行", () => {
   it(
-    "Codex CLIが--dangerously-skip-permissionsを拒否した場合に自動でフラグを無効化する",
+    "Codex CLIが--dangerously-bypass-approvals-and-sandboxを拒否した場合に自動でフラグを無効化する",
     async () => {
       const tempDir = await Deno.makeTempDir();
       try {
@@ -509,8 +509,8 @@ describe("Worker --dangerously-skip-permissions フラグ自動再試行", () =>
 
           const firstArgs = executor.argsHistory[0];
           const secondArgs = executor.argsHistory[1];
-          assertEquals(firstArgs.includes("--dangerously-skip-permissions"), true);
-          assertEquals(secondArgs.includes("--dangerously-skip-permissions"), false);
+          assertEquals(firstArgs.includes("--dangerously-bypass-approvals-and-sandbox"), true);
+          assertEquals(secondArgs.includes("--dangerously-bypass-approvals-and-sandbox"), false);
         } finally {
           await Deno.remove(repoPath, { recursive: true });
           resetOutputFormatDetectionForTests();
@@ -592,7 +592,7 @@ describe("Worker Codex CLI TTYフォールバック", () => {
 
 describe("Worker Codex CLI互換フラグの多段再試行", () => {
   it(
-    "--output-format・--verbose・--dangerously-skip-permissionsが順に非対応でも順次無効化して成功する",
+    "--json・--verbose・--dangerously-bypass-approvals-and-sandboxが順に非対応でも順次無効化して成功する",
     async () => {
       const tempDir = await Deno.makeTempDir();
       try {
@@ -650,31 +650,31 @@ describe("Worker Codex CLI互換フラグの多段再試行", () => {
           const thirdArgs = executor.argsHistory[2];
           const fourthArgs = executor.argsHistory[3];
 
-          assertEquals(firstArgs.includes("--output-format"), true);
+          assertEquals(firstArgs.includes("--json"), true);
           assertEquals(firstArgs.includes("--verbose"), true);
           assertEquals(
-            firstArgs.includes("--dangerously-skip-permissions"),
+            firstArgs.includes("--dangerously-bypass-approvals-and-sandbox"),
             true,
           );
 
-          assertEquals(secondArgs.includes("--output-format"), false);
+          assertEquals(secondArgs.includes("--json"), false);
           assertEquals(secondArgs.includes("--verbose"), true);
           assertEquals(
-            secondArgs.includes("--dangerously-skip-permissions"),
+            secondArgs.includes("--dangerously-bypass-approvals-and-sandbox"),
             true,
           );
 
-          assertEquals(thirdArgs.includes("--output-format"), false);
+          assertEquals(thirdArgs.includes("--json"), false);
           assertEquals(thirdArgs.includes("--verbose"), false);
           assertEquals(
-            thirdArgs.includes("--dangerously-skip-permissions"),
+            thirdArgs.includes("--dangerously-bypass-approvals-and-sandbox"),
             true,
           );
 
-          assertEquals(fourthArgs.includes("--output-format"), false);
+          assertEquals(fourthArgs.includes("--json"), false);
           assertEquals(fourthArgs.includes("--verbose"), false);
           assertEquals(
-            fourthArgs.includes("--dangerously-skip-permissions"),
+            fourthArgs.includes("--dangerously-bypass-approvals-and-sandbox"),
             false,
           );
         } finally {
