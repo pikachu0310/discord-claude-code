@@ -287,6 +287,43 @@ export class Worker implements IWorker {
           this.configuration.disableDangerouslySkipPermissionsFlag();
           continue;
         }
+
+        if (
+          ["--json", "exec", "resume"].includes(lastResult.error.option) &&
+          attempt < maxAttempts - 1
+        ) {
+          this.logVerbose("Codex CLIのexec/jsonモードに非対応のためレガシーモードへ切り替え", {
+            option: lastResult.error.option,
+            stderr: lastResult.error.stderr,
+          });
+          this.configuration.disableExecJsonMode();
+          continue;
+        }
+
+        if (
+          lastResult.error.option === "--color" &&
+          attempt < maxAttempts - 1
+        ) {
+          this.logVerbose("Codex CLIが--colorをサポートしていないためフラグを無効化", {
+            stderr: lastResult.error.stderr,
+          });
+          this.configuration.disableExecColorFlag();
+          continue;
+        }
+
+        if (
+          lastResult.error.option === "--dangerously-bypass-approvals-and-sandbox" &&
+          attempt < maxAttempts - 1
+        ) {
+          this.logVerbose(
+            "Codex CLIが--dangerously-bypass-approvals-and-sandboxをサポートしていないため旧フラグへ切り替え",
+            {
+              stderr: lastResult.error.stderr,
+            },
+          );
+          this.configuration.disableDangerouslyBypassFlag();
+          continue;
+        }
       }
 
       if (
@@ -712,6 +749,93 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
     stdout: string,
   ): Result<never, WorkerError> {
     const stderrMessage = new TextDecoder().decode(stderr);
+
+    if (
+      stderrMessage.includes("unrecognized subcommand 'exec'") ||
+      stderrMessage.includes("unknown subcommand 'exec'") ||
+      (stderrMessage.includes("wasn't expected") &&
+        stderrMessage.includes("exec"))
+    ) {
+      this.logVerbose("Codex CLIがexecサブコマンドを認識しないエラーを検出", {
+        exitCode: code,
+        stderr: stderrMessage,
+      });
+      return err({
+        type: "CODEX_CLI_UNSUPPORTED_OPTION",
+        option: "exec",
+        stderr: stderrMessage,
+      });
+    }
+
+    if (
+      stderrMessage.includes("unexpected argument '--json'") ||
+      stderrMessage.includes("unknown argument '--json'") ||
+      stderrMessage.includes("Found argument '--json'")
+    ) {
+      this.logVerbose("Codex CLIが--jsonを認識しないエラーを検出", {
+        exitCode: code,
+        stderr: stderrMessage,
+      });
+      return err({
+        type: "CODEX_CLI_UNSUPPORTED_OPTION",
+        option: "--json",
+        stderr: stderrMessage,
+      });
+    }
+
+    if (
+      stderrMessage.includes("unexpected argument '--color'") ||
+      stderrMessage.includes("Found argument '--color'")
+    ) {
+      this.logVerbose("Codex CLIが--colorを認識しないエラーを検出", {
+        exitCode: code,
+        stderr: stderrMessage,
+      });
+      return err({
+        type: "CODEX_CLI_UNSUPPORTED_OPTION",
+        option: "--color",
+        stderr: stderrMessage,
+      });
+    }
+
+    if (
+      stderrMessage.includes(
+        "unexpected argument '--dangerously-bypass-approvals-and-sandbox'",
+      ) ||
+      stderrMessage.includes(
+        "Found argument '--dangerously-bypass-approvals-and-sandbox'",
+      )
+    ) {
+      this.logVerbose(
+        "Codex CLIが--dangerously-bypass-approvals-and-sandboxを認識しないエラーを検出",
+        {
+          exitCode: code,
+          stderr: stderrMessage,
+        },
+      );
+      return err({
+        type: "CODEX_CLI_UNSUPPORTED_OPTION",
+        option: "--dangerously-bypass-approvals-and-sandbox",
+        stderr: stderrMessage,
+      });
+    }
+
+    if (
+      stderrMessage.includes("unrecognized subcommand 'resume'") ||
+      stderrMessage.includes("unknown subcommand 'resume'") ||
+      (stderrMessage.includes("wasn't expected") &&
+        stderrMessage.includes("resume"))
+    ) {
+      this.logVerbose("Codex CLIがexec resumeを認識しないエラーを検出", {
+        exitCode: code,
+        stderr: stderrMessage,
+      });
+      return err({
+        type: "CODEX_CLI_UNSUPPORTED_OPTION",
+        option: "resume",
+        stderr: stderrMessage,
+      });
+    }
 
     if (stderrMessage.includes("unexpected argument '--output-format'")) {
       this.logVerbose("Codex CLIが--output-formatを認識しないエラーを検出", {
