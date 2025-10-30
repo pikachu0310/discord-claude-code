@@ -4,10 +4,12 @@ import { PLaMoTranslator } from "../plamo-translator.ts";
 import { MessageFormatter } from "./message-formatter.ts";
 import {
   CodexCodeRateLimitError,
+  type CodexExecJsonEvent,
   type CodexStreamMessage,
   CodexStreamProcessor,
   JsonParseError,
   SchemaValidationError,
+  type ExecEventState,
 } from "./codex-stream-processor.ts";
 import { WorkerConfiguration } from "./worker-configuration.ts";
 import { SessionLogger } from "./session-logger.ts";
@@ -423,6 +425,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
     const streamProcessor = new CodexStreamProcessor(
       this.formatter,
     );
+    const execEventState = CodexStreamProcessor.createExecEventState();
 
     const processLine = (line: string) => {
       if (!line.trim()) return;
@@ -433,9 +436,10 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
         onProgress,
         { result, newSessionId },
         (updates) => {
-          result = updates.result || result;
-          newSessionId = updates.newSessionId || newSessionId;
+          result = updates.result ?? result;
+          newSessionId = updates.newSessionId ?? newSessionId;
         },
+        execEventState,
       );
     };
 
@@ -553,6 +557,7 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       result?: string;
       newSessionId?: string | null;
     }) => void,
+    execEventState: ExecEventState,
   ): void {
     // 空行はスキップ
     if (!line.trim()) {
@@ -564,52 +569,65 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       // 安全なJSON解析と型検証を使用
       const parsed = streamProcessor.parseJsonLine(line);
 
-      // メッセージタイプごとの処理
-      switch (parsed.type) {
-        case "result":
-          this.handleResultMessage(parsed, updateState);
-          break;
-        case "assistant":
-          this.handleAssistantMessage(parsed, state, updateState);
-          // assistantメッセージからトークン使用量を追跡
-          if (parsed.message?.usage && this.rateLimitManager) {
-            const usage = parsed.message.usage;
-            const inputTokens = usage.input_tokens +
-              (usage.cache_creation_input_tokens || 0) +
-              (usage.cache_read_input_tokens || 0);
-            const outputTokens = usage.output_tokens;
+      if (streamProcessor.isLegacyMessage(parsed)) {
+        // メッセージタイプごとの処理
+        switch (parsed.type) {
+          case "result":
+            this.handleResultMessage(parsed, updateState);
+            break;
+          case "assistant":
+            this.handleAssistantMessage(parsed, state, updateState);
+            // assistantメッセージからトークン使用量を追跡
+            if (parsed.message?.usage && this.rateLimitManager) {
+              const usage = parsed.message.usage;
+              const inputTokens = usage.input_tokens +
+                (usage.cache_creation_input_tokens || 0) +
+                (usage.cache_read_input_tokens || 0);
+              const outputTokens = usage.output_tokens;
 
-            this.rateLimitManager.trackTokenUsage(inputTokens, outputTokens);
-            this.logVerbose("トークン使用量を追跡", {
-              inputTokens,
-              outputTokens,
-              totalTokens: inputTokens + outputTokens,
-            });
-          }
-          break;
-      }
-
-      // Codex Codeの実際の出力内容をDiscordに送信
-      if (onProgress) {
-        const outputMessage = streamProcessor.extractOutputMessage(parsed);
-        if (outputMessage) {
-          // 最後のアクティビティを記録
-          this.lastActivityDescription = this.extractActivityDescription(
-            parsed,
-            outputMessage,
-          );
-          onProgress(this.formatter.formatResponse(outputMessage)).catch(
-            console.error,
-          );
+              this.rateLimitManager.trackTokenUsage(inputTokens, outputTokens);
+              this.logVerbose("トークン使用量を追跡", {
+                inputTokens,
+                outputTokens,
+                totalTokens: inputTokens + outputTokens,
+              });
+            }
+            break;
         }
+
+        // Codex Codeの実際の出力内容をDiscordに送信
+        if (onProgress) {
+          const outputMessage = streamProcessor.extractOutputMessage(parsed);
+          if (outputMessage) {
+            // 最後のアクティビティを記録
+            this.lastActivityDescription = this.extractActivityDescription(
+              parsed,
+              outputMessage,
+            );
+            onProgress(this.formatter.formatResponse(outputMessage)).catch(
+              console.error,
+            );
+          }
+        }
+
+        // セッションIDを更新
+        if (parsed.session_id) {
+          updateState({ newSessionId: parsed.session_id });
+          this.logVerbose("新しいセッションID取得", {
+            sessionId: parsed.session_id,
+          });
+        }
+        return;
       }
 
-      // セッションIDを更新
-      if (parsed.session_id) {
-        updateState({ newSessionId: parsed.session_id });
-        this.logVerbose("新しいセッションID取得", {
-          sessionId: parsed.session_id,
-        });
+      if (streamProcessor.isExecJsonEvent(parsed)) {
+        this.handleExecJsonEvent(
+          parsed,
+          streamProcessor,
+          onProgress,
+          updateState,
+          execEventState,
+        );
       }
     } catch (parseError) {
       if (parseError instanceof CodexCodeRateLimitError) {
@@ -741,6 +759,87 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
         }
       }
     }
+  }
+
+  private handleExecJsonEvent(
+    event: CodexExecJsonEvent,
+    streamProcessor: CodexStreamProcessor,
+    onProgress: ((content: string) => Promise<void>) | undefined,
+    updateState: (updates: { result?: string; newSessionId?: string | null }) => void,
+    execEventState: ExecEventState,
+  ): void {
+    const sessionId = this.extractSessionIdFromExecEvent(event);
+    if (sessionId) {
+      updateState({ newSessionId: sessionId });
+      if (sessionId !== this.state.sessionId) {
+        this.logVerbose("execモードで新しいセッションID取得", { sessionId });
+      }
+    }
+
+    const usage = this.extractUsageFromExecEvent(event);
+    if (usage && this.rateLimitManager) {
+      this.rateLimitManager.trackTokenUsage(usage.inputTokens, usage.outputTokens);
+      this.logVerbose("execモードでトークン使用量を追跡", {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.inputTokens + usage.outputTokens,
+      });
+    }
+
+    const update = streamProcessor.extractExecOutputUpdate(event, execEventState);
+    if (!update) {
+      return;
+    }
+
+    updateState({ result: update.aggregatedText });
+    this.lastActivityDescription = this.buildActivityDescriptionFromText(
+      update.aggregatedText,
+    );
+
+    if (update.shouldDisplay && onProgress) {
+      onProgress(this.formatter.formatResponse(update.aggregatedText)).catch(
+        console.error,
+      );
+    }
+  }
+
+  private extractSessionIdFromExecEvent(event: CodexExecJsonEvent): string | null {
+    const candidates = [
+      event.session_id,
+      event.session?.id,
+      event.response?.session_id,
+      event.response?.session?.id,
+      event.turn?.session_id,
+      event.turn?.session?.id,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  private extractUsageFromExecEvent(
+    event: CodexExecJsonEvent,
+  ): { inputTokens: number; outputTokens: number } | null {
+    const usages = [event.usage, event.response?.usage];
+
+    for (const usage of usages) {
+      if (!usage) continue;
+      const inputTokens = (usage.input_tokens || 0) +
+        (usage.cache_creation_input_tokens || 0) +
+        (usage.cache_read_input_tokens || 0) +
+        (usage.cached_input_tokens || 0);
+      const outputTokens = usage.output_tokens || 0;
+      if (inputTokens > 0 || outputTokens > 0) {
+        return { inputTokens, outputTokens };
+      }
+    }
+
+    return null;
   }
 
   private handleErrorMessage(
@@ -1317,13 +1416,24 @@ For research, analysis, or informational tasks, do not use the exit_plan_mode to
       }
     }
 
-    // その他のメッセージの場合、最初の50文字を使用
+    // その他のメッセージの場合、テキストから説明を生成
     if (outputMessage) {
-      const preview = outputMessage.substring(0, 50);
-      return preview.length < outputMessage.length ? `${preview}...` : preview;
+      return this.buildActivityDescriptionFromText(outputMessage);
     }
 
     return "アクティビティ実行中";
+  }
+
+  private buildActivityDescriptionFromText(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return "アクティビティ実行中";
+    }
+    const firstLine = trimmed.split("\n")[0];
+    if (firstLine.length <= 50) {
+      return firstLine;
+    }
+    return `${firstLine.substring(0, 50)}...`;
   }
 
   /**
