@@ -37,7 +37,7 @@ function getCodexCliHelpText(): string | null {
 
   try {
     const command = new Deno.Command("codex", {
-      args: ["--help"],
+      args: ["exec", "--help"],
       stdout: "piped",
       stderr: "piped",
     });
@@ -71,7 +71,8 @@ export function shouldUseOutputFormatFlag(): boolean {
 
   const helpText = getCodexCliHelpText();
   if (helpText !== null) {
-    cachedOutputFormatSupport = helpText.includes("--output-format");
+    cachedOutputFormatSupport =
+      helpText.includes("--json") || helpText.includes("--experimental-json");
     return cachedOutputFormatSupport;
   }
 
@@ -102,9 +103,9 @@ export function shouldUseDangerouslySkipPermissionsFlag(): boolean {
 
   const helpText = getCodexCliHelpText();
   if (helpText !== null) {
-    cachedDangerouslySkipPermissionsSupport = helpText.includes(
-      "--dangerously-skip-permissions",
-    );
+    cachedDangerouslySkipPermissionsSupport =
+      helpText.includes("--dangerously-bypass-approvals-and-sandbox") ||
+      helpText.includes("--yolo");
     return cachedDangerouslySkipPermissionsSupport;
   }
 
