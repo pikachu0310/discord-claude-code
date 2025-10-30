@@ -2,7 +2,7 @@ const decoder = new TextDecoder();
 
 let cachedHelpText: string | null = null;
 let helpDetectionAttempted = false;
-let cachedOutputFormatSupport: boolean | null = null;
+let cachedJsonFlagSupport: boolean | null = null;
 let cachedVerboseSupport: boolean | null = null;
 let cachedDangerouslySkipPermissionsSupport: boolean | null = null;
 
@@ -58,26 +58,35 @@ function getCodexCliHelpText(): string | null {
   return null;
 }
 
+/**
+ * Determine whether to enable the Codex CLI JSON streaming flag.
+ *
+ * Historically the project relied on `--output-format stream-json` from the
+ * Claude Code CLI. The modern Codex CLI exposes an equivalent `--json`
+ * (or `--experimental-json`) flag, so we keep the existing function name for
+ * backwards compatibility while switching the implementation to the new flag.
+ */
 export function shouldUseOutputFormatFlag(): boolean {
   const envOverride = getEnvOverride();
   if (envOverride !== null) {
-    cachedOutputFormatSupport = envOverride;
+    cachedJsonFlagSupport = envOverride;
     return envOverride;
   }
 
-  if (cachedOutputFormatSupport !== null) {
-    return cachedOutputFormatSupport;
+  if (cachedJsonFlagSupport !== null) {
+    return cachedJsonFlagSupport;
   }
 
   const helpText = getCodexCliHelpText();
   if (helpText !== null) {
-    cachedOutputFormatSupport = helpText.includes("--output-format");
-    return cachedOutputFormatSupport;
+    cachedJsonFlagSupport = helpText.includes("--json") ||
+      helpText.includes("--experimental-json");
+    return cachedJsonFlagSupport;
   }
 
   // Codex CLIが存在しない場合などは従来の挙動を維持する
-  cachedOutputFormatSupport = true;
-  return cachedOutputFormatSupport;
+  cachedJsonFlagSupport = true;
+  return cachedJsonFlagSupport;
 }
 
 export function shouldUseVerboseFlag(): boolean {
@@ -103,8 +112,8 @@ export function shouldUseDangerouslySkipPermissionsFlag(): boolean {
   const helpText = getCodexCliHelpText();
   if (helpText !== null) {
     cachedDangerouslySkipPermissionsSupport = helpText.includes(
-      "--dangerously-skip-permissions",
-    );
+      "--dangerously-bypass-approvals-and-sandbox",
+    ) || helpText.includes("--yolo");
     return cachedDangerouslySkipPermissionsSupport;
   }
 
@@ -115,7 +124,7 @@ export function shouldUseDangerouslySkipPermissionsFlag(): boolean {
 export function resetOutputFormatDetectionForTests(): void {
   cachedHelpText = null;
   helpDetectionAttempted = false;
-  cachedOutputFormatSupport = null;
+  cachedJsonFlagSupport = null;
   cachedVerboseSupport = null;
   cachedDangerouslySkipPermissionsSupport = null;
 }

@@ -119,26 +119,28 @@ export class WorkerConfiguration {
    * Codexコマンドの引数を構築
    */
   buildCodexArgs(prompt: string, sessionId?: string | null): string[] {
-    const args: string[] = [];
+    const args: string[] = ["exec"];
+
+    if (sessionId) {
+      args.push("resume", sessionId);
+    }
 
     if (this.useOutputFormatFlag) {
-      args.push("--output-format", "stream-json");
+      args.push("--json");
     }
+
+    args.push("--color", "never");
+    args.push("--ask-for-approval", "never");
+    args.push("--sandbox", "danger-full-access");
 
     // verboseモードかつCodex CLIがサポートしている場合のみ--verboseを追加
     if (this.verbose && this.useCliVerboseFlag) {
       args.push("--verbose");
     }
 
-    // セッション継続の場合
-    if (sessionId) {
-      // args.push("--resume", sessionId);
-      args.push("--continue");
-    }
-
     // 権限チェックスキップが有効な場合のみ
     if (this.dangerouslySkipPermissions && this.useDangerouslySkipPermissionsFlag) {
-      args.push("--dangerously-skip-permissions");
+      args.push("--dangerously-bypass-approvals-and-sandbox");
     }
 
     // append-system-promptが設定されている場合
@@ -146,7 +148,9 @@ export class WorkerConfiguration {
       args.push("--append-system-prompt", this.appendSystemPrompt);
     }
 
-    args.push(prompt);
+    if (prompt.length > 0) {
+      args.push("--", prompt);
+    }
 
     return args;
   }
@@ -159,7 +163,7 @@ export class WorkerConfiguration {
   }
 
   /**
-   * --output-formatフラグを使用するかどうか
+   * --jsonフラグ（旧--output-format相当）を使用するかどうか
    */
   shouldUseOutputFormat(): boolean {
     return this.useOutputFormatFlag;
@@ -173,7 +177,7 @@ export class WorkerConfiguration {
   }
 
   /**
-   * Codex CLIの--dangerously-skip-permissionsフラグを使用するかどうか
+   * Codex CLIの--dangerously-bypass-approvals-and-sandboxフラグを使用するかどうか
    */
   shouldUseDangerouslySkipPermissionsFlag(): boolean {
     return this.useDangerouslySkipPermissionsFlag;
@@ -187,7 +191,7 @@ export class WorkerConfiguration {
   }
 
   /**
-   * Codex CLIが--dangerously-skip-permissionsをサポートしない場合にフラグを無効化
+   * Codex CLIが--dangerously-bypass-approvals-and-sandboxをサポートしない場合にフラグを無効化
    */
   disableDangerouslySkipPermissionsFlag(): void {
     this.useDangerouslySkipPermissionsFlag = false;

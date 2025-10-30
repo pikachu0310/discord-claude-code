@@ -40,9 +40,16 @@ Deno.test("WorkerConfiguration - buildCodexArgs - 基本", () => {
   const args = config.buildCodexArgs("テストプロンプト");
 
   assertEquals(args, [
-    "--output-format",
-    "stream-json",
-    "--dangerously-skip-permissions",
+    "exec",
+    "--json",
+    "--color",
+    "never",
+    "--ask-for-approval",
+    "never",
+    "--sandbox",
+    "danger-full-access",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "--",
     "テストプロンプト",
   ]);
 });
@@ -72,7 +79,7 @@ Deno.test(
 );
 
 Deno.test(
-  "WorkerConfiguration - Codex CLIが--dangerously-skip-permissionsをサポートしない場合にフラグを付与しない",
+  "WorkerConfiguration - Codex CLIが--dangerously-bypass-approvals-and-sandboxをサポートしない場合にフラグを付与しない",
   () => {
     try {
       resetOutputFormatDetectionForTests();
@@ -80,7 +87,7 @@ Deno.test(
       const config = new WorkerConfiguration();
       const args = config.buildCodexArgs("テストプロンプト");
 
-      assertEquals(args.includes("--dangerously-skip-permissions"), false);
+      assertEquals(args.includes("--dangerously-bypass-approvals-and-sandbox"), false);
     } finally {
       resetOutputFormatDetectionForTests();
     }
@@ -123,7 +130,7 @@ Deno.test("WorkerConfiguration - CODEX_CLI_OUTPUT_FORMAT_MODE=neverでフラグ�
     const config = new WorkerConfiguration();
     const args = config.buildCodexArgs("テストプロンプト");
 
-    assertEquals(args.includes("--output-format"), false);
+    assertEquals(args.includes("--json"), false);
   } finally {
     Deno.env.delete("CODEX_CLI_OUTPUT_FORMAT_MODE");
     resetOutputFormatDetectionForTests();
