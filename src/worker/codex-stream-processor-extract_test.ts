@@ -1,5 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/testing/asserts.ts";
 import {
+  type CodexExecJsonEvent,
   type CodexStreamMessage,
   CodexStreamProcessor,
 } from "./codex-stream-processor.ts";
@@ -409,4 +410,70 @@ Deno.test("extractOutputMessage - 中程度の長さの結果を先頭末尾で�
   assertEquals(result?.includes("行10: 処理結果"), true);
   assertEquals(result?.includes("行省略"), true);
   assertEquals(result?.includes("行50: 処理結果"), true);
+});
+
+Deno.test("extractExecOutputUpdate - agent_message deltas are aggregated", () => {
+  const formatter = new MessageFormatter();
+  const processor = new CodexStreamProcessor(formatter);
+  const state = CodexStreamProcessor.createExecEventState();
+
+  const deltaEvent: CodexExecJsonEvent = {
+    type: "item.delta",
+    item: { id: "item_1", type: "agent_message", delta: { text: "こんにちは" } },
+  };
+
+  const deltaUpdate = processor.extractExecOutputUpdate(deltaEvent, state);
+  assertEquals(deltaUpdate?.aggregatedText, "こんにちは");
+  assertEquals(deltaUpdate?.isFinal, false);
+  assertEquals(deltaUpdate?.shouldDisplay, true);
+
+  const completeEvent: CodexExecJsonEvent = {
+    type: "item.completed",
+    item: { id: "item_1", type: "agent_message", text: "こんにちは！" },
+  };
+
+  const completeUpdate = processor.extractExecOutputUpdate(completeEvent, state);
+  assertEquals(completeUpdate?.aggregatedText, "こんにちは！");
+  assertEquals(completeUpdate?.isFinal, true);
+  assertEquals(completeUpdate?.shouldDisplay, true);
+});
+
+Deno.test("extractExecOutputUpdate - reasoning items are ignored", () => {
+  const formatter = new MessageFormatter();
+  const processor = new CodexStreamProcessor(formatter);
+  const state = CodexStreamProcessor.createExecEventState();
+
+  const reasoningEvent: CodexExecJsonEvent = {
+    type: "item.completed",
+    item: { id: "item_reason", type: "reasoning", text: "考え中" },
+  };
+
+  const update = processor.extractExecOutputUpdate(reasoningEvent, state);
+  assertEquals(update, null);
+});
+
+Deno.test("extractExecOutputUpdate - response completion exposes final text", () => {
+  const formatter = new MessageFormatter();
+  const processor = new CodexStreamProcessor(formatter);
+  const state = CodexStreamProcessor.createExecEventState();
+
+  const deltaEvent: CodexExecJsonEvent = {
+    type: "response.output_text.delta",
+    delta: { text: "Hello" },
+    response: { id: "resp_1" },
+  };
+
+  const deltaUpdate = processor.extractExecOutputUpdate(deltaEvent, state);
+  assertEquals(deltaUpdate?.aggregatedText, "Hello");
+  assertEquals(deltaUpdate?.shouldDisplay, false);
+
+  const completeEvent: CodexExecJsonEvent = {
+    type: "response.completed",
+    response: { id: "resp_1", output_text: "Hello" },
+  };
+
+  const completeUpdate = processor.extractExecOutputUpdate(completeEvent, state);
+  assertEquals(completeUpdate?.aggregatedText, "Hello");
+  assertEquals(completeUpdate?.shouldDisplay, true);
+  assertEquals(completeUpdate?.isFinal, true);
 });

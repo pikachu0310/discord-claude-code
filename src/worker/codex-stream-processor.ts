@@ -1,6 +1,13 @@
 import { MessageFormatter } from "./message-formatter.ts";
 import Anthropic from "npm:@anthropic-ai/sdk";
 
+const LEGACY_MESSAGE_TYPES = new Set([
+  "assistant",
+  "user",
+  "result",
+  "system",
+]);
+
 /**
  * JSON解析エラー
  */
@@ -107,6 +114,69 @@ export type CodexStreamMessage =
     permissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan";
   };
 
+export interface CodexExecUsage {
+  input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cached_input_tokens?: number;
+  output_tokens?: number;
+}
+
+export interface CodexExecItemContentBlock {
+  type?: string;
+  text?: string;
+  content?: CodexExecItemContentBlock[] | string;
+  [key: string]: unknown;
+}
+
+export interface CodexExecItem {
+  id?: string;
+  type?: string;
+  role?: string;
+  text?: string;
+  content?: CodexExecItemContentBlock[] | string;
+  delta?: { text?: string };
+  output_text?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface CodexExecResponse {
+  id?: string;
+  session_id?: string;
+  session?: { id?: string };
+  output?: CodexExecItemContentBlock[];
+  output_text?: string;
+  usage?: CodexExecUsage;
+  [key: string]: unknown;
+}
+
+export interface CodexExecJsonEvent {
+  type: string;
+  item?: CodexExecItem;
+  delta?: { text?: string };
+  response?: CodexExecResponse;
+  session?: { id?: string };
+  session_id?: string;
+  turn?: { id?: string; session_id?: string; session?: { id?: string } };
+  usage?: CodexExecUsage;
+  [key: string]: unknown;
+}
+
+export type CodexStreamEvent = CodexStreamMessage | CodexExecJsonEvent;
+
+export interface ExecEventState {
+  aggregates: Map<string, string>;
+}
+
+export interface ExecOutputUpdate {
+  aggregatedText: string;
+  deltaText?: string;
+  isFinal: boolean;
+  shouldDisplay: boolean;
+  itemType?: string;
+}
+
 export class CodexCodeRateLimitError extends Error {
   public readonly timestamp: number;
   public readonly retryAt: number;
@@ -129,20 +199,38 @@ export class CodexStreamProcessor {
     this.formatter = formatter;
   }
 
+  static createExecEventState(): ExecEventState {
+    return { aggregates: new Map<string, string>() };
+  }
+
   /**
    * JSONライン文字列を安全に解析して型検証を行う
    * @param line JSON文字列の行
-   * @returns パースされ、検証されたCodexStreamMessage
+   * @returns パースされ、検証されたCodexStreamEvent
    * @throws {JsonParseError} JSON解析に失敗した場合
    * @throws {SchemaValidationError} スキーマ検証に失敗した場合
    */
-  parseJsonLine(line: string): CodexStreamMessage {
+  parseJsonLine(line: string): CodexStreamEvent {
     // JSON解析
     try {
-      return JSON.parse(line) as CodexStreamMessage;
+      return JSON.parse(line) as CodexStreamEvent;
     } catch (error) {
       throw new JsonParseError(line, error);
     }
+  }
+
+  isLegacyMessage(event: CodexStreamEvent): event is CodexStreamMessage {
+    return typeof event === "object" && event !== null &&
+      "type" in event &&
+      typeof (event as { type: unknown }).type === "string" &&
+      LEGACY_MESSAGE_TYPES.has((event as { type: string }).type);
+  }
+
+  isExecJsonEvent(event: CodexStreamEvent): event is CodexExecJsonEvent {
+    return typeof event === "object" && event !== null &&
+      "type" in event &&
+      typeof (event as { type: unknown }).type === "string" &&
+      !LEGACY_MESSAGE_TYPES.has((event as { type: string }).type);
   }
 
   /**
@@ -214,25 +302,180 @@ export class CodexStreamProcessor {
   /**
    * JSONL行からCodex Codeの実際の出力メッセージを抽出する
    */
-  extractOutputMessage(parsed: CodexStreamMessage): string | null {
-    switch (parsed.type) {
-      case "assistant":
-        // assistantメッセージの処理
-        return this.extractAssistantMessage(parsed.message.content);
-      case "user":
-        // userメッセージの処理（tool_result等）
-        return this.extractUserMessage(parsed.message.content);
-      case "system":
-        // systemメッセージの処理（初期化情報）
-        return this.extractSystemMessage(parsed);
+  extractOutputMessage(parsed: CodexStreamEvent): string | null {
+    if (this.isLegacyMessage(parsed)) {
+      switch (parsed.type) {
+        case "assistant":
+          // assistantメッセージの処理
+          return this.extractAssistantMessage(parsed.message.content);
+        case "user":
+          // userメッセージの処理（tool_result等）
+          return this.extractUserMessage(parsed.message.content);
+        case "system":
+          // systemメッセージの処理（初期化情報）
+          return this.extractSystemMessage(parsed);
 
-      case "result":
-        // resultメッセージは最終結果として別途処理されるため、ここでは返さない
-        return null;
-
-      default:
-        throw new Error(parsed satisfies never);
+        case "result":
+          // resultメッセージは最終結果として別途処理されるため、ここでは返さない
+          return null;
+      }
     }
+
+    return null;
+  }
+
+  extractExecOutputUpdate(
+    event: CodexExecJsonEvent,
+    state: ExecEventState,
+  ): ExecOutputUpdate | null {
+    const eventType = event.type;
+
+    if (eventType.startsWith("item.")) {
+      if (!event.item) {
+        return null;
+      }
+
+      const itemId = event.item.id || "unknown";
+      const aggregateKey = `item:${itemId}`;
+      const previous = state.aggregates.get(aggregateKey) ?? "";
+      const extracted = this.extractItemAggregateText(event, previous);
+      if (!extracted) {
+        return null;
+      }
+
+      const { aggregate, delta, itemType } = extracted;
+      if (!aggregate) {
+        return null;
+      }
+
+      const normalizedType = (itemType || "").toLowerCase();
+      const isAgentMessage = normalizedType.includes("agent") ||
+        normalizedType.includes("assistant") ||
+        normalizedType === "message" ||
+        normalizedType === "output_text";
+      if (!isAgentMessage) {
+        return null;
+      }
+
+      const isFinalItem = eventType === "item.completed";
+      if (!isFinalItem && aggregate === previous) {
+        return null;
+      }
+
+      state.aggregates.set(aggregateKey, aggregate);
+
+      return {
+        aggregatedText: aggregate,
+        deltaText: delta,
+        isFinal: isFinalItem,
+        shouldDisplay: true,
+        itemType,
+      };
+    }
+
+    if (eventType.startsWith("response.")) {
+      const responseId = event.response?.id || "response";
+      const aggregateKey = `response:${responseId}`;
+      const previous = state.aggregates.get(aggregateKey) ?? "";
+      const aggregate = this.extractResponseText(event, previous);
+      if (!aggregate) {
+        return null;
+      }
+
+      const isFinalResponse = eventType === "response.completed";
+      if (!isFinalResponse && aggregate === previous) {
+        return null;
+      }
+
+      state.aggregates.set(aggregateKey, aggregate);
+      return {
+        aggregatedText: aggregate,
+        deltaText: aggregate.slice(previous.length) || undefined,
+        isFinal: isFinalResponse,
+        shouldDisplay: isFinalResponse,
+      };
+    }
+
+    return null;
+  }
+
+  private extractResponseText(
+    event: CodexExecJsonEvent,
+    previous: string,
+  ): string | null {
+    if (event.delta?.text) {
+      return previous + (event.delta.text || "").toString();
+    }
+
+    if (event.response?.output_text && typeof event.response.output_text === "string") {
+      return event.response.output_text;
+    }
+
+    if (Array.isArray(event.response?.output)) {
+      return this.collectExecBlocksText(event.response?.output);
+    }
+
+    return null;
+  }
+
+  private extractItemAggregateText(
+    event: CodexExecJsonEvent,
+    previous: string,
+  ): { aggregate: string; delta?: string; itemType?: string } | null {
+    const item = event.item;
+    if (!item) {
+      return null;
+    }
+
+    let aggregate = previous;
+    let delta: string | undefined;
+
+    if (item.delta?.text) {
+      delta = item.delta.text;
+    } else if (event.delta?.text) {
+      delta = event.delta.text;
+    }
+
+    if (typeof item.text === "string") {
+      aggregate = item.text;
+    } else if (typeof item.output_text === "string") {
+      aggregate = item.output_text;
+    } else if (typeof item.content === "string") {
+      aggregate = item.content;
+    } else if (Array.isArray(item.content)) {
+      aggregate = this.collectExecBlocksText(item.content);
+    }
+
+    if (!aggregate && delta) {
+      aggregate = previous + delta;
+    }
+
+    if (!aggregate) {
+      return null;
+    }
+
+    return { aggregate, delta, itemType: item.type };
+  }
+
+  private collectExecBlocksText(blocks: CodexExecItemContentBlock[]): string {
+    let result = "";
+    for (const block of blocks) {
+      if (!block) continue;
+      if (typeof block.text === "string") {
+        result += block.text;
+        continue;
+      }
+
+      if (Array.isArray(block.content)) {
+        result += this.collectExecBlocksText(block.content);
+        continue;
+      }
+
+      if (typeof block.content === "string") {
+        result += block.content;
+      }
+    }
+    return result;
   }
 
   /**
