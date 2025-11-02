@@ -107,6 +107,85 @@ export type CodexStreamMessage =
     permissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan";
   };
 
+export type CodexExecItemContent =
+  | string
+  | {
+    type?: string;
+    text?: string;
+    text_delta?: string;
+    data?: string;
+  };
+
+export interface CodexExecItem {
+  id?: string;
+  type?: string;
+  text?: string;
+  delta?: string | { text?: string; text_delta?: string };
+  content?: CodexExecItemContent[];
+  output_text?: string | CodexExecItemContent[];
+  message?: string;
+  session_id?: string;
+  is_error?: boolean;
+}
+
+export interface CodexExecJsonEvent {
+  type: string;
+  item?: CodexExecItem;
+  session_id?: string;
+  session?: { id?: string };
+  result?: string;
+  response?: {
+    output_text?: string | CodexExecItemContent[];
+  };
+  usage?: {
+    input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+    output_tokens?: number;
+    server_tool_use?: {
+      web_search_requests?: number;
+    };
+    service_tier?: string;
+  };
+  error?: { message?: string };
+  [key: string]: unknown;
+}
+
+export function isLegacyCodexStreamMessage(
+  value: unknown,
+): value is CodexStreamMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== "string") {
+    return false;
+  }
+
+  return ["assistant", "user", "result", "system"].includes(type);
+}
+
+export function isCodexExecJsonEvent(
+  value: unknown,
+): value is CodexExecJsonEvent {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== "string") {
+    return false;
+  }
+
+  return type.startsWith("item.") ||
+    type.startsWith("turn.") ||
+    type.startsWith("response.") ||
+    type.startsWith("session.") ||
+    type.startsWith("thread.") ||
+    type.startsWith("error");
+}
+
 export class CodexCodeRateLimitError extends Error {
   public readonly timestamp: number;
   public readonly retryAt: number;
@@ -136,10 +215,10 @@ export class CodexStreamProcessor {
    * @throws {JsonParseError} JSON解析に失敗した場合
    * @throws {SchemaValidationError} スキーマ検証に失敗した場合
    */
-  parseJsonLine(line: string): CodexStreamMessage {
+  parseJsonLine(line: string): CodexStreamMessage | CodexExecJsonEvent {
     // JSON解析
     try {
-      return JSON.parse(line) as CodexStreamMessage;
+      return JSON.parse(line) as CodexStreamMessage | CodexExecJsonEvent;
     } catch (error) {
       throw new JsonParseError(line, error);
     }
@@ -214,25 +293,182 @@ export class CodexStreamProcessor {
   /**
    * JSONL行からCodex Codeの実際の出力メッセージを抽出する
    */
-  extractOutputMessage(parsed: CodexStreamMessage): string | null {
-    switch (parsed.type) {
-      case "assistant":
-        // assistantメッセージの処理
-        return this.extractAssistantMessage(parsed.message.content);
-      case "user":
-        // userメッセージの処理（tool_result等）
-        return this.extractUserMessage(parsed.message.content);
-      case "system":
-        // systemメッセージの処理（初期化情報）
-        return this.extractSystemMessage(parsed);
-
-      case "result":
-        // resultメッセージは最終結果として別途処理されるため、ここでは返さない
-        return null;
-
-      default:
-        throw new Error(parsed satisfies never);
+  extractOutputMessage(
+    parsed: CodexStreamMessage | CodexExecJsonEvent,
+  ): string | null {
+    if (isLegacyCodexStreamMessage(parsed)) {
+      switch (parsed.type) {
+        case "assistant":
+          return this.extractAssistantMessage(parsed.message.content);
+        case "user":
+          return this.extractUserMessage(parsed.message.content);
+        case "system":
+          return this.extractSystemMessage(parsed);
+        case "result":
+          return null;
+      }
+      return null;
     }
+
+    if (isCodexExecJsonEvent(parsed)) {
+      if (parsed.type.startsWith("item.")) {
+        const text = this.extractExecItemText(parsed.item);
+        if (!text) {
+          return null;
+        }
+
+        const itemType = parsed.item?.type;
+        switch (itemType) {
+          case "reasoning":
+            return `🤔 ${text}`;
+          case "tool_result":
+          case "tool_response":
+          case "command_result":
+            return `${parsed.item?.is_error ? "❌" : "✅"} **ツール実行結果:**\n${
+              this.formatter.formatToolResult(
+                text,
+                parsed.item?.is_error ?? false,
+              )
+            }`;
+          default:
+            return text;
+        }
+      }
+
+      if (parsed.type === "response.error" && parsed.error?.message) {
+        return `❌ Codexエラー: ${parsed.error.message}`;
+      }
+
+      if (parsed.type === "turn.completed" ||
+        parsed.type === "response.completed") {
+        return this.extractExecResponseText(parsed);
+      }
+    }
+
+    return null;
+  }
+
+  extractSessionId(
+    parsed: CodexStreamMessage | CodexExecJsonEvent,
+  ): string | null {
+    if (isLegacyCodexStreamMessage(parsed)) {
+      return parsed.session_id ?? null;
+    }
+
+    if (!isCodexExecJsonEvent(parsed)) {
+      return null;
+    }
+
+    if (typeof parsed.session_id === "string" && parsed.session_id) {
+      return parsed.session_id;
+    }
+
+    if (parsed.session && typeof parsed.session === "object") {
+      const sessionId = (parsed.session as { id?: unknown }).id;
+      if (typeof sessionId === "string" && sessionId) {
+        return sessionId;
+      }
+    }
+
+    if (parsed.item && typeof parsed.item.session_id === "string") {
+      return parsed.item.session_id;
+    }
+
+    const threadId = this.normalizeSessionId(
+      (parsed as { thread_id?: unknown }).thread_id,
+    );
+    if (threadId) {
+      return threadId;
+    }
+
+    return this.findSessionIdRecursively(parsed);
+  }
+
+  extractSessionIdFromText(text: string | null | undefined): string | null {
+    if (!text) {
+      return null;
+    }
+
+    const searchTargets = Array.isArray(text) ? text : [text];
+    for (const target of searchTargets) {
+      if (typeof target !== "string") {
+        continue;
+      }
+
+      const patterns = [
+        /\bcodex(?:\s+exec)?\s+resume\s+([0-9a-zA-Z][0-9a-zA-Z\-]{8,})\b/g,
+        /\bsession(?:[_\s-]*id)?\s*[:=]\s*([0-9a-zA-Z][0-9a-zA-Z\-]{8,})\b/g,
+        /\bthread(?:[_\s-]*id)?\s*[:=]\s*([0-9a-zA-Z][0-9a-zA-Z\-]{8,})\b/g,
+      ];
+
+      for (const pattern of patterns) {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(target)) !== null) {
+          const candidate = this.normalizeSessionId(match[1]);
+          if (candidate) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  extractUsageCounts(
+    parsed: CodexStreamMessage | CodexExecJsonEvent,
+  ): { inputTokens: number; outputTokens: number } | null {
+    const usage = isLegacyCodexStreamMessage(parsed) ? parsed.usage :
+      (isCodexExecJsonEvent(parsed) ? parsed.usage : undefined);
+
+    if (!usage) {
+      return null;
+    }
+
+    const inputTokens = (usage.input_tokens || 0) +
+      (usage.cache_creation_input_tokens || 0) +
+      (usage.cache_read_input_tokens || 0);
+    const outputTokens = usage.output_tokens || 0;
+
+    if (inputTokens === 0 && outputTokens === 0) {
+      return null;
+    }
+
+    return { inputTokens, outputTokens };
+  }
+
+  extractExecResponseText(parsed: CodexExecJsonEvent): string | null {
+    if (parsed.result && typeof parsed.result === "string") {
+      return parsed.result;
+    }
+
+    if (parsed.response?.output_text) {
+      const outputText = parsed.response.output_text;
+      if (typeof outputText === "string") {
+        return outputText;
+      }
+      if (Array.isArray(outputText)) {
+        const joined = outputText.map((item) => {
+          if (typeof item === "string") {
+            return item;
+          }
+          if (item && typeof item === "object") {
+            const text = (item as { text?: unknown }).text;
+            if (typeof text === "string") {
+              return text;
+            }
+            const textDelta = (item as { text_delta?: unknown }).text_delta;
+            if (typeof textDelta === "string") {
+              return textDelta;
+            }
+          }
+          return "";
+        }).join("");
+        return joined || null;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -343,6 +579,91 @@ export class CodexStreamProcessor {
     return null;
   }
 
+  private extractExecItemText(item?: CodexExecItem): string | null {
+    if (!item) {
+      return null;
+    }
+
+    const parts: string[] = [];
+
+    if (typeof item.text === "string") {
+      parts.push(item.text);
+    }
+
+    if (typeof item.delta === "string") {
+      parts.push(item.delta);
+    } else if (item.delta && typeof item.delta === "object") {
+      const deltaText = (item.delta as { text?: unknown }).text;
+      if (typeof deltaText === "string") {
+        parts.push(deltaText);
+      }
+      const deltaTextDelta = (item.delta as { text_delta?: unknown }).text_delta;
+      if (typeof deltaTextDelta === "string") {
+        parts.push(deltaTextDelta);
+      }
+    }
+
+    if (typeof item.message === "string") {
+      parts.push(item.message);
+    }
+
+    if (item.output_text) {
+      const output = item.output_text;
+      if (typeof output === "string") {
+        parts.push(output);
+      } else if (Array.isArray(output)) {
+        for (const entry of output) {
+          if (typeof entry === "string") {
+            parts.push(entry);
+          } else if (entry && typeof entry === "object") {
+            const text = (entry as { text?: unknown }).text;
+            if (typeof text === "string") {
+              parts.push(text);
+            }
+            const textDelta = (entry as { text_delta?: unknown }).text_delta;
+            if (typeof textDelta === "string") {
+              parts.push(textDelta);
+            }
+            const data = (entry as { data?: unknown }).data;
+            if (typeof data === "string") {
+              parts.push(data);
+            }
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(item.content)) {
+      for (const content of item.content) {
+        if (typeof content === "string") {
+          parts.push(content);
+          continue;
+        }
+
+        if (content && typeof content === "object") {
+          const text = (content as { text?: unknown }).text;
+          if (typeof text === "string") {
+            parts.push(text);
+          }
+          const textDelta = (content as { text_delta?: unknown }).text_delta;
+          if (typeof textDelta === "string") {
+            parts.push(textDelta);
+          }
+          const data = (content as { data?: unknown }).data;
+          if (typeof data === "string") {
+            parts.push(data);
+          }
+        }
+      }
+    }
+
+    if (parts.length === 0) {
+      return null;
+    }
+
+    return parts.join("");
+  }
+
   /**
    * Codex Codeのレートリミットメッセージかを判定する
    */
@@ -360,6 +681,131 @@ export class CodexStreamProcessor {
     if (match) {
       return parseInt(match[1], 10);
     }
+    return null;
+  }
+
+  private normalizeSessionId(value: unknown): string | null {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
+      }
+      if (/[\s/\\]/.test(trimmed)) {
+        return null;
+      }
+      return trimmed;
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? String(value) : null;
+    }
+
+    return null;
+  }
+
+  private findSessionIdRecursively(
+    value: unknown,
+    parentKey?: string,
+    grandparentKey?: string,
+  ): string | null {
+    const normalizedParent = parentKey?.toLowerCase();
+    const normalizedGrandparent = grandparentKey?.toLowerCase();
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number"
+    ) {
+      if (
+        normalizedParent === "session" ||
+        normalizedParent === "session_id" ||
+        normalizedParent === "sessionid" ||
+        normalizedParent === "thread_id" ||
+        normalizedParent === "threadid"
+      ) {
+        return this.normalizeSessionId(value);
+      }
+
+      if (
+        normalizedParent === "id" &&
+        normalizedGrandparent &&
+        (normalizedGrandparent.includes("session") ||
+          normalizedGrandparent.includes("thread"))
+      ) {
+        return this.normalizeSessionId(value);
+      }
+
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      for (const element of value) {
+        const candidate = this.findSessionIdRecursively(
+          element,
+          parentKey,
+          grandparentKey,
+        );
+        if (candidate) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+
+    for (const [key, child] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
+      const normalizedKey = key.toLowerCase();
+
+      if (
+        normalizedKey === "session" ||
+        normalizedKey === "session_id" ||
+        normalizedKey === "sessionid" ||
+        normalizedKey === "thread" ||
+        normalizedKey === "thread_id" ||
+        normalizedKey === "threadid"
+      ) {
+        const candidate = this.findSessionIdRecursively(
+          child,
+          key,
+          parentKey,
+        );
+        if (candidate) {
+          return candidate;
+        }
+        continue;
+      }
+
+      if (
+        normalizedKey === "id" &&
+        normalizedParent &&
+        (normalizedParent.includes("session") ||
+          normalizedParent.includes("thread"))
+      ) {
+        const candidate = this.findSessionIdRecursively(
+          child,
+          key,
+          parentKey,
+        );
+        if (candidate) {
+          return candidate;
+        }
+        continue;
+      }
+
+      const candidate = this.findSessionIdRecursively(
+        child,
+        key,
+        parentKey,
+      );
+      if (candidate) {
+        return candidate;
+      }
+    }
+
     return null;
   }
 }
