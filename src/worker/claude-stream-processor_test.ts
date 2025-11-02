@@ -72,7 +72,10 @@ Deno.test("ClaudeStreamProcessor - extractOutputMessage - tool_useメッセー�
   } satisfies ClaudeStreamMessage;
 
   const result = processor.extractOutputMessage(message);
-  assertEquals(result, "⚡ **Bash**: ファイル一覧");
+  assertEquals(
+    result,
+    "⚡ **Bash**:\nファイル一覧\n```sh\nls\n```",
+  );
 });
 
 Deno.test("ClaudeStreamProcessor - extractOutputMessage - resultメッセージは無視", () => {

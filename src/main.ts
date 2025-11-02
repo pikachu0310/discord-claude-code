@@ -20,6 +20,7 @@ import { Admin } from "./admin/admin.ts";
 import { getEnv } from "./env.ts";
 import { ensureRepository, parseRepository } from "./git-utils.ts";
 import { createDevcontainerProgressHandler } from "./utils/devcontainer-progress.ts";
+import { splitDiscordMessage } from "./utils/discord-message.ts";
 import { RepositoryPatInfo, WorkspaceManager } from "./workspace/workspace.ts";
 import {
   checkSystemRequirements,
@@ -234,13 +235,17 @@ client.once(Events.ClientReady, async (readyClient) => {
 
         // 進捗コールバック
         const onProgress = async (content: string) => {
-          try {
-            await channel.send({
-              content: content,
-              flags: 4096, // SUPPRESS_NOTIFICATIONS flag
-            });
-          } catch (sendError) {
-            console.error("自動再開メッセージ送信エラー:", sendError);
+          const chunks = splitDiscordMessage(content);
+          for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            try {
+              await channel.send({
+                content: chunk,
+                flags: 4096, // SUPPRESS_NOTIFICATIONS flag
+              });
+            } catch (sendError) {
+              console.error("自動再開メッセージ送信エラー:", sendError);
+            }
           }
         };
 
@@ -270,7 +275,11 @@ client.once(Events.ClientReady, async (readyClient) => {
         const reply = replyResult.value;
 
         if (typeof reply === "string") {
-          await (channel as TextChannel).send(reply);
+          const chunks = splitDiscordMessage(reply);
+          for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            await (channel as TextChannel).send(chunk);
+          }
         } else {
           await (channel as TextChannel).send({
             content: reply.content,
@@ -1078,23 +1087,68 @@ client.on(Events.MessageCreate, async (message) => {
   }
 
   try {
-    let lastUpdateTime = Date.now();
+    let lastUpdateTime = 0;
     const UPDATE_INTERVAL = 2000; // 2秒ごとに更新
+    let pendingProgress: string | null = null;
+    let progressTimeout: number | null = null;
+
+    const sendProgressChunks = async (progressContent: string) => {
+      const chunks = splitDiscordMessage(progressContent);
+      for (const chunk of chunks) {
+        if (!chunk.trim()) continue;
+        await message.channel.send({
+          content: chunk,
+          flags: 4096, // SUPPRESS_NOTIFICATIONS flag
+        });
+      }
+    };
+
+    const scheduleProgressFlush = () => {
+      if (progressTimeout !== null) {
+        return;
+      }
+      const delay = Math.max(
+        0,
+        UPDATE_INTERVAL - (Date.now() - lastUpdateTime),
+      );
+      progressTimeout = setTimeout(() => {
+        (async () => {
+          progressTimeout = null;
+          if (!pendingProgress) {
+            return;
+          }
+          const toSend = pendingProgress;
+          pendingProgress = null;
+          try {
+            await sendProgressChunks(toSend);
+            lastUpdateTime = Date.now();
+          } catch (sendError) {
+            console.error("メッセージ送信エラー:", sendError);
+          }
+        })();
+      }, delay);
+    };
 
     // 進捗更新用のコールバック（新規メッセージ投稿、通知なし）
     const onProgress = async (content: string) => {
+      if (!content) {
+        return;
+      }
+
       const now = Date.now();
+
       if (now - lastUpdateTime >= UPDATE_INTERVAL) {
         try {
-          await message.channel.send({
-            content: content,
-            flags: 4096, // SUPPRESS_NOTIFICATIONS flag
-          });
-          lastUpdateTime = now;
+          await sendProgressChunks(content);
+          lastUpdateTime = Date.now();
         } catch (sendError) {
           console.error("メッセージ送信エラー:", sendError);
         }
+        return;
       }
+
+      pendingProgress = content;
+      scheduleProgressFlush();
     };
 
     // リアクション追加用のコールバック
@@ -1139,8 +1193,19 @@ client.on(Events.MessageCreate, async (message) => {
 
     // 最終的な返信を送信
     if (typeof reply === "string") {
+      const chunks = splitDiscordMessage(reply);
+      if (chunks.length === 0) {
+        return;
+      }
+
       // 通常のテキストレスポンス（リプライ機能使用）
-      await message.reply(reply);
+      const [firstChunk, ...restChunks] = chunks;
+      await message.reply(firstChunk);
+
+      for (const chunk of restChunks) {
+        if (!chunk.trim()) continue;
+        await message.channel.send(chunk);
+      }
     } else {
       // DiscordMessage形式（ボタン付きメッセージなど）
       await message.reply({

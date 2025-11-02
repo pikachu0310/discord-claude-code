@@ -93,7 +93,7 @@ export class TokenUsageTracker {
    */
   getStatusString(): string {
     const info = this.getUsageInfo();
-    return `${info.currentUsage}/${info.maxTokens} (${info.usagePercentage}%) ${info.nextResetTimeUTC}`;
+    return `${info.currentUsage}/${info.maxTokens} (${info.usagePercentage}%) 次回リセット: ${info.nextResetTimeUTC} UTC`;
   }
 
   /**

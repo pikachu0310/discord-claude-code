@@ -173,7 +173,10 @@ Deno.test("extractOutputMessage - Bashツール実行を正しく処理する", 
   const result = processor.extractOutputMessage(
     parsedMessage as unknown as ClaudeStreamMessage,
   );
-  assertEquals(result, "⚡ **Bash**: ファイル一覧を表示");
+  assertEquals(
+    result,
+    "⚡ **Bash**:\nファイル一覧を表示\n```sh\nls -la\n```",
+  );
 });
 
 Deno.test("extractOutputMessage - ツール結果（tool_result）を正しく処理する", () => {
@@ -329,9 +332,19 @@ ${"詳細な変更内容が続く...\n".repeat(200)}`;
   );
   assertEquals(typeof result, "string");
   assertEquals(result?.includes("✅ **ツール実行結果:**"), true);
-  assertEquals(result?.includes("📊 **要約:**"), true);
-  assertEquals(result?.includes("コミット 1234567"), true);
-  assertEquals(result?.includes("3ファイル変更"), true);
+  assertEquals(result?.includes("📊 **要約:**"), false);
+  assertEquals(
+    result?.includes(
+      "[feature-branch 1234567] Add new feature for user authentication",
+    ),
+    true,
+  );
+  assertEquals(
+    result?.includes("3 files changed, 150 insertions(+), 20 deletions(-)"),
+    true,
+  );
+  assertEquals(result?.includes("create mode 100644 src/auth/login.ts"), true);
+  assertEquals(result?.includes("詳細な変更内容が続く..."), true);
 });
 
 Deno.test("extractOutputMessage - エラー結果から重要部分を抽出する", () => {
@@ -372,8 +385,7 @@ ${"INFO: 追加情報が続く...\n".repeat(10)}`;
   assertEquals(result?.includes("FAILED: 処理が失敗しました"), true);
   assertEquals(result?.includes("Exception: NullPointerException"), true);
   assertEquals(result?.includes("Fatal: システムエラーが発生しました"), true);
-  // デバッグ情報は含まれない
-  assertEquals(result?.includes("DEBUG:"), false);
+  assertEquals(result?.includes("DEBUG:"), true);
 });
 
 Deno.test("extractOutputMessage - 中程度の長さの結果を先頭末尾で表示する", () => {
@@ -407,6 +419,6 @@ Deno.test("extractOutputMessage - 中程度の長さの結果を先頭末尾で�
   assertEquals(result?.includes("✅ **ツール実行結果:**"), true);
   assertEquals(result?.includes("行1: 処理結果"), true);
   assertEquals(result?.includes("行10: 処理結果"), true);
-  assertEquals(result?.includes("行省略"), true);
+  assertEquals(result?.includes("行省略"), false);
   assertEquals(result?.includes("行50: 処理結果"), true);
 });
