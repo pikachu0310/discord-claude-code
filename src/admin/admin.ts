@@ -878,6 +878,34 @@ export class Admin implements IAdmin {
   }
 
   /**
+   * 現在のトークン使用量情報を取得
+   */
+  getTokenUsageInfo() {
+    return this.rateLimitManager.getTokenUsageInfo();
+  }
+
+  /**
+   * アクティブなワーカーの数を取得
+   */
+  getActiveWorkerCount(): number {
+    return this.workerManager.getWorkerCount();
+  }
+
+  /**
+   * レート制限状態を取得
+   */
+  async isRateLimited(): Promise<boolean> {
+    return await this.rateLimitManager.hasActiveRateLimit();
+  }
+
+  /**
+   * レート制限終了時刻を取得
+   */
+  async getRateLimitEndTime(): Promise<Date | null> {
+    return await this.rateLimitManager.getCurrentRateLimitEndTime();
+  }
+
+  /**
    * verboseログを出力する
    */
   private logVerbose(

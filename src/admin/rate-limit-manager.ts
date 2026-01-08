@@ -537,6 +537,46 @@ export class RateLimitManager {
   }
 
   /**
+   * アクティブなレート制限があるかどうかを確認
+   */
+  async hasActiveRateLimit(): Promise<boolean> {
+    const now = Date.now();
+    const states = await this.workspaceManager.getAllWorkerStates();
+    
+    for (const state of states) {
+      if (state.rateLimitTimestamp) {
+        const resumeTime = state.rateLimitTimestamp * 1000 + RATE_LIMIT.AUTO_RESUME_DELAY_MS;
+        if (now < resumeTime) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 現在のレート制限終了時刻を取得（最も遅い終了時刻）
+   */
+  async getCurrentRateLimitEndTime(): Promise<Date | null> {
+    const now = Date.now();
+    const states = await this.workspaceManager.getAllWorkerStates();
+    let latestEndTime: number | null = null;
+    
+    for (const state of states) {
+      if (state.rateLimitTimestamp) {
+        const resumeTime = state.rateLimitTimestamp * 1000 + RATE_LIMIT.AUTO_RESUME_DELAY_MS;
+        if (now < resumeTime) {
+          if (!latestEndTime || resumeTime > latestEndTime) {
+            latestEndTime = resumeTime;
+          }
+        }
+      }
+    }
+    
+    return latestEndTime ? new Date(latestEndTime) : null;
+  }
+
+  /**
    * Discordステータスを定期的に更新する
    */
   async updateDiscordStatusWithTokenUsage(): Promise<void> {

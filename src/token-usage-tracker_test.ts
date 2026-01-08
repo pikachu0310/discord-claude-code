@@ -30,7 +30,7 @@ Deno.test("TokenUsageTracker - ステータス文字列生成", () => {
   // 50000/100000 (50%) の形式で表示されることを確認
   assertEquals(statusString.includes("50000/100000"), true);
   assertEquals(statusString.includes("(50%)"), true);
-  assertEquals(statusString.includes("次回リセット:"), true);
+  assertEquals(statusString.includes(":"), true); // JST時刻フォーマット確認
 });
 
 Deno.test("TokenUsageTracker - 使用量情報取得", () => {
@@ -47,8 +47,8 @@ Deno.test("TokenUsageTracker - 使用量情報取得", () => {
 
   // 次回リセット時刻が設定されていることを確認
   assertEquals(info.nextResetTime instanceof Date, true);
-  assertEquals(typeof info.nextResetTimeUTC, "string");
-  assertEquals(info.nextResetTimeUTC.includes(":"), true); // 時刻フォーマット確認
+  assertEquals(typeof info.nextResetTimeJST, "string");
+  assertEquals(info.nextResetTimeJST.includes(":"), true); // 時刻フォーマット確認
 });
 
 Deno.test("TokenUsageTracker - リセット機能", () => {

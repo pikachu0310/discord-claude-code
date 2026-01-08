@@ -201,6 +201,10 @@ const commands = [
     .setDescription("現在のスレッドをクローズします")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageThreads)
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName("status")
+    .setDescription("現在のトークン使用量と統計情報を表示します")
+    .toJSON(),
 ];
 
 // Bot起動時の処理
@@ -862,6 +866,63 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction) {
       } catch {
         await interaction.reply("エラーが発生しました。");
       }
+    }
+  } else if (commandName === "status") {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // トークン使用量情報を取得
+      const tokenInfo = admin.getTokenUsageInfo();
+      
+      // アクティブワーカー数を取得
+      const activeWorkerCount = admin.getActiveWorkerCount();
+      
+      // レート制限状態を取得
+      const isRateLimited = await admin.isRateLimited();
+      const rateLimitInfo = isRateLimited ? await admin.getRateLimitEndTime() : null;
+      
+      // 現在時刻（JST）
+      const now = new Date();
+      const currentTimeJST = now.toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
+      // ステータスメッセージを構築
+      let statusMessage = `📊 **トークン使用量とシステム状態**\n\n`;
+      
+      // トークン使用量
+      statusMessage += `🎯 **トークン使用量**\n`;
+      statusMessage += `現在の使用量: ${tokenInfo.currentUsage.toLocaleString()}/${tokenInfo.maxTokens.toLocaleString()} トークン\n`;
+      statusMessage += `使用率: ${tokenInfo.usagePercentage}%\n`;
+      statusMessage += `次回リセット時刻: ${tokenInfo.nextResetTimeJST}\n\n`;
+      
+      // システム状態
+      statusMessage += `⚡ **システム状態**\n`;
+      statusMessage += `アクティブワーカー数: ${activeWorkerCount}\n`;
+      
+      if (isRateLimited && rateLimitInfo) {
+        const endTimeJST = rateLimitInfo.toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        statusMessage += `レート制限状態: 🚫 制限中（${endTimeJST}頃復旧予定）\n`;
+      } else {
+        statusMessage += `レート制限状態: ✅ 正常\n`;
+      }
+      
+      statusMessage += `\n📅 **取得時刻**: ${currentTimeJST}`;
+
+      await interaction.editReply(statusMessage);
+    } catch (error) {
+      console.error("/statusコマンドエラー:", error);
+      await interaction.editReply("ステータス情報の取得中にエラーが発生しました。");
     }
   } else if (commandName === "close") {
     try {
